@@ -179,7 +179,9 @@ export function postDelivery(ref: string, user: string): { doc: Delivery; entrie
     let remaining = line.qty;
 
     // FIFO: consume from source bay first, then the largest other holding bay.
-    const order: string[] = [line.pullFrom, ...Object.keys(p.stock).filter((k) => k !== line.pullFrom)];
+    const plan = check.lines.find((c) => c.sku === line.sku);
+    const primary = plan?.pullFrom ?? doc.from;
+    const order: string[] = [primary, ...Object.keys(p.stock).filter((k) => k !== primary)];
     const taken: Record<string, number> = {};
 
     for (const loc of order) {
