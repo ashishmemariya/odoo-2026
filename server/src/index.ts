@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,7 @@ import { HttpError } from './engine.js';
 import { getDb } from './store.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(here, '../.env') });
 const PORT = Number(process.env.PORT ?? 4000);
 
 const app = express();

@@ -23,6 +23,8 @@
     "preview": "npm run preview --workspace frontend",
     "typecheck": "node node_modules/typescript/bin/tsc -p client/tsconfig.json --noEmit && node node_modules/typescript/bin/tsc -p server/tsconfig.json --noEmit",
     "smoke": "node server/scripts/smoke.mjs",
+    "browser": "node scripts/browser-check.mjs",
+    "verify": "npm run typecheck && npm run smoke && npm run browser",
     "reset": "node -e \"import('./server/dist/store.js').then(m=>{m.hardReset();console.log('Database reseeded.')})\""
   },
   "devDependencies": {

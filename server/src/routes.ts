@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDb, commit, resetDb } from './store.js';
+import { getDb, commit, resetDb, nowStamp } from './store.js';
 import {
   HttpError,
   checkDelivery,
@@ -15,7 +15,17 @@ import {
   stockAt,
   totalStock,
 } from './engine.js';
-import { runScenarioStep, scenarioState } from './scenario.js';
+import {
+  ADJUSTMENT_FLOW,
+  DELIVERY_FLOW,
+  RECEIPT_FLOW,
+  TRANSFER_FLOW,
+  adjustmentView,
+  deliveryView,
+  receiptView,
+  transferView,
+} from './status.js';
+import { runScenarioStep, scenarioState, startDrill } from './scenario.js';
 import {
   SESSION_TTL_MS,
   activeSessionCount,
@@ -41,9 +51,15 @@ api.get('/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOStrin
 
 api.get('/snapshot', (req, res) => {
   const { credentials, ...safe } = getDb();
+  const now = Date.now();
   res.json({
     ...safe,
     products: safe.products.map(productView),
+    // documents carry the derived attention flag + step position
+    receipts: safe.receipts.map((r) => receiptView(r, now)),
+    deliveries: safe.deliveries.map((d) => deliveryView(d, now)),
+    transfers: safe.transfers.map((t) => transferView(t, now)),
+    adjustments: safe.adjustments.map((a) => adjustmentView(a, now)),
     dashboard: dashboardSummary(),
     scenario: scenarioState(),
     me: req.user ? { user: req.user, permissions: permissionsFor(req.user.role) } : null,
@@ -205,15 +221,22 @@ api.get('/receipts', (req, res) => {
   const status = String(req.query.status ?? 'All');
   let list = getDb().receipts;
   if (status !== 'All') list = list.filter((r) => r.status === status);
-  res.json(list);
+  const now = Date.now();
+  // `?attention=Overdue` filters on the derived flag rather than a stored status.
+  if (String(req.query.attention ?? '') === 'Overdue') {
+    list = list.filter((r) => receiptView(r, now).attention?.kind === 'Overdue');
+  }
+  res.json(list.map((r) => receiptView(r, now)));
 });
 
-// `ref` travels as a query param because refs contain slashes (WH/IN/0001).
+// `ref` travels as a query param because refs contain slashes (RC-1001).
 api.get('/receipt', (req, res) => {
   const ref = String(req.query.ref ?? '');
   const doc = getDb().receipts.find((r) => r.ref === ref);
   if (!doc) throw new HttpError(404, `Receipt ${ref} not found`);
   res.json({
+    ...receiptView(doc),
+    flow: RECEIPT_FLOW,
     ...doc,
     lines: doc.items.map((l) => {
       const p = findProduct(l.sku);
@@ -242,7 +265,11 @@ api.get('/deliveries', (req, res) => {
   const status = String(req.query.status ?? 'All');
   let list = getDb().deliveries;
   if (status !== 'All') list = list.filter((d) => d.status === status);
-  res.json(list);
+  const now = Date.now();
+  if (String(req.query.attention ?? '') === 'Overdue') {
+    list = list.filter((d) => deliveryView(d, now).attention?.kind === 'Overdue');
+  }
+  res.json(list.map((d) => deliveryView(d, now)));
 });
 
 api.get('/delivery', (req, res) => {
@@ -251,7 +278,8 @@ api.get('/delivery', (req, res) => {
   if (!doc) throw new HttpError(404, `Delivery ${ref} not found`);
   const check = checkDelivery(doc.ref);
   res.json({
-    ...doc,
+    ...deliveryView(doc),
+    flow: DELIVERY_FLOW,
     check,
     lines: doc.items.map((l) => {
       const p = findProduct(l.sku);
@@ -282,7 +310,16 @@ api.post('/delivery/validate', requirePermission('delivery.post'), (req, res) =>
 
 /* ---------------------------- transfers ---------------------------- */
 
-api.get('/transfers', (_req, res) => res.json(getDb().transfers));
+api.get('/transfers', (req, res) => {
+  const now = Date.now();
+  let list = getDb().transfers;
+  const status = String(req.query.status ?? 'All');
+  if (status !== 'All') list = list.filter((t) => t.status === status);
+  if (String(req.query.attention ?? '') === 'Overdue') {
+    list = list.filter((t) => transferView(t, now).attention?.kind === 'Overdue');
+  }
+  res.json(list.map((t) => transferView(t, now)));
+});
 
 api.post('/transfers', requirePermission('transfer.create'), (req, res) => {
   const { from, to, sku, qty } = req.body ?? {};
@@ -303,7 +340,8 @@ api.post('/transfers', requirePermission('transfer.create'), (req, res) => {
     qty: amount,
     requestedBy: currentUser(req).name,
     status: 'Draft' as const,
-    createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    scheduledDate: nowStamp(),
+    createdAt: nowStamp(),
   };
   db.transfers.push(doc);
   commit();
@@ -317,9 +355,15 @@ api.post('/transfer/execute', requirePermission('transfer.post'), (req, res) => 
 
 /* ---------------------------- physical counts ---------------------------- */
 
-api.get('/adjustments', (_req, res) =>
-  res.json(getDb().adjustments.map((a) => ({ ...a, dualSignoff: requiresDualSignoff(a) }))),
-);
+api.get('/adjustments', (req, res) => {
+  const now = Date.now();
+  let list = getDb().adjustments;
+  const state = String(req.query.status ?? 'All');
+  if (state !== 'All') list = list.filter((a) => a.state === state);
+  res.json(
+    list.map((a) => ({ ...adjustmentView(a, now), dualSignoff: requiresDualSignoff(a) })),
+  );
+});
 
 api.post('/adjustments', requirePermission('adjustment.create'), (req, res) => {
   const { sku, location, recorded, counted, reason, memo } = req.body ?? {};
@@ -374,6 +418,19 @@ api.get('/warehouses', (_req, res) => res.json(getDb().warehouses));
 
 api.get('/locations', (_req, res) => res.json(getDb().locations));
 
+/**
+ * The canonical lifecycles, so the client renders steppers and filter chips from
+ * the same definition the engine validates against.
+ */
+api.get('/status-flows', (_req, res) =>
+  res.json({
+    receipt: RECEIPT_FLOW,
+    delivery: DELIVERY_FLOW,
+    transfer: TRANSFER_FLOW,
+    adjustment: ADJUSTMENT_FLOW,
+  }),
+);
+
 /* ---------------------------- scenario ---------------------------- */
 
 api.get('/scenario', (_req, res) => res.json(scenarioState()));
@@ -383,7 +440,17 @@ api.post('/scenario/run', requirePermission('transfer.post'), (req, res) => {
   res.json({ ...result, snapshot: { products: getDb().products.map((p) => ({ ...p, total: totalStock(p) })), ledger: getDb().ledger, dashboard: dashboardSummary() } });
 });
 
+/**
+ * Rewinds the drill to an empty rack so the four steps can be executed by hand.
+ * Writes counter-moving ledger rows rather than deleting any.
+ */
+api.post('/scenario/start-drill', requirePermission('demo.reset'), (req, res) => {
+  res.json(startDrill(currentUser(req).name));
+});
+
+/** Restores the canonical seeded system — the live state with 77 kg on hand. */
 api.post('/scenario/reset', requirePermission('demo.reset'), (_req, res) => {
+  // Seeded user IDs are stable across a reseed, so open sessions stay valid here too.
   resetDb();
   res.json(scenarioState());
 });
