@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "settings": {
     "valuationMethod": "FIFO",
     "removalStrategy": "FIFO",
@@ -10,22 +10,66 @@
   },
   "users": [
     {
+      "id": "U-1001",
       "name": "Rahul Sharma",
+      "email": "demo@stocksense.app",
       "role": "Inventory Manager",
+      "title": "Inventory Manager",
       "initials": "RS",
-      "auditorId": "8821"
+      "auditorId": "8821",
+      "active": true
     },
     {
+      "id": "U-1002",
       "name": "Priya Patel",
+      "email": "priya@stocksense.app",
       "role": "Warehouse Staff",
+      "title": "Warehouse Associate",
       "initials": "PP",
-      "auditorId": "8834"
+      "auditorId": "8834",
+      "active": true
     },
     {
-      "name": "Adele Vance",
+      "id": "U-1003",
+      "name": "Arjun Verma",
+      "email": "arjun@stocksense.app",
       "role": "Floor Supervisor",
+      "title": "Floor Supervisor",
       "initials": "AV",
-      "auditorId": "8840"
+      "auditorId": "8840",
+      "active": true
+    },
+    {
+      "id": "U-1004",
+      "name": "Sana Kapoor",
+      "email": "admin@stocksense.app",
+      "role": "Admin",
+      "title": "Systems Administrator",
+      "initials": "SK",
+      "auditorId": "8801",
+      "active": true
+    }
+  ],
+  "credentials": [
+    {
+      "userId": "U-1001",
+      "salt": "c1ac55dd8d6f401ec77f489ca6effc80",
+      "hash": "cda06a92df36f33089a56e97875c206ad9a07acbfa352f829a2c3de7c4ea62636ed1c3c630bbb9732fcc62fa62cc96a49b351c2b90fc91d3b453feb27b5505f7"
+    },
+    {
+      "userId": "U-1002",
+      "salt": "39551e04f2deef153504be66bd99a2a4",
+      "hash": "61d59126bfcc39ee4741d6786ceb9d7fc528568dff9ba17527654b29e9af799a7e5e3fa248a350b19ecdbbed82c2b65f5246391a0a992bc6be0ce91072f3dc13"
+    },
+    {
+      "userId": "U-1003",
+      "salt": "ed71edddc275081c35dd8e4ef8c53651",
+      "hash": "af20249834cf5f53f4f4c24128ef74518f3bb8650abb0059acededd9dec730fc2ba145e5eea64aa2b162a0df1e8041d313ce63f2fc3ccc4246199cb9c79aa552"
+    },
+    {
+      "userId": "U-1004",
+      "salt": "31a8148498fc8c4dedb1d396019abb3d",
+      "hash": "206878b131839d4259f63b995f09bbfcde06d6c3c23dea1598f8a140851e2363ea415d048b013f4977b6112b816b0088c62636a7ea21a2427c1300ad76935d27"
     }
   ],
   "warehouses": [

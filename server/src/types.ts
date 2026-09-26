@@ -173,12 +173,64 @@ export interface StorageLocation {
   status: 'Active' | 'Receiving' | 'Ready' | 'Chill Pass' | 'Locked';
 }
 
+export type Role = 'Admin' | 'Inventory Manager' | 'Warehouse Staff' | 'Floor Supervisor';
+
 export interface User {
+  id: string;
   name: string;
-  role: 'Inventory Manager' | 'Warehouse Staff' | 'Floor Supervisor';
+  email: string;
+  role: Role;
+  title: string;
   initials: string;
   auditorId: string;
+  active: boolean;
 }
+
+/**
+ * Password material is deliberately kept OUT of `User` so that any code path which
+ * serialises users (snapshot, `/api/users`, notifications) can never leak a hash.
+ */
+export interface CredentialRecord {
+  userId: string;
+  salt: string;
+  hash: string;
+}
+
+export interface AuthSession {
+  token: string;
+  userId: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+/** Coarse capability list driving UI visibility and server-side enforcement. */
+export type Permission =
+  | 'product.view'
+  | 'product.manage'
+  | 'receipt.view'
+  | 'receipt.create'
+  | 'receipt.post'
+  | 'delivery.view'
+  | 'delivery.create'
+  | 'delivery.pick'
+  | 'delivery.post'
+  | 'transfer.view'
+  | 'transfer.create'
+  | 'transfer.post'
+  | 'adjustment.view'
+  | 'adjustment.create'
+  | 'adjustment.approve'
+  | 'count.view'
+  | 'count.create'
+  | 'count.approve'
+  | 'ledger.view'
+  | 'ledger.export'
+  | 'report.view'
+  | 'settings.manage'
+  | 'diagnostics.view'
+  | 'demo.reset'
+  | 'user.impersonate';
+
 
 export interface Settings {
   valuationMethod: 'FIFO' | 'AVCO';
@@ -193,6 +245,7 @@ export interface Database {
   version: number;
   settings: Settings;
   users: User[];
+  credentials: CredentialRecord[];
   warehouses: Warehouse[];
   locations: StorageLocation[];
   products: Product[];

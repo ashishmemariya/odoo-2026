@@ -1,10 +1,77 @@
-import type { Database } from './types.js';
+import type { CredentialRecord, Database, User } from './types.js';
+import { hashPassword } from './auth.js';
 
 const STAMP = '2024-11-04';
 
+/**
+ * Bump whenever the seed shape changes. `store.ts` discards any persisted file
+ * whose version does not match, so a schema change can never boot into a
+ * half-migrated database.
+ */
+export const SEED_VERSION = 2;
+
+/**
+ * Demo directory. Passwords are only ever stored as scrypt hashes; the plaintext
+ * below exists to be hashed once at seed time and is never written to disk.
+ */
+const SEED_USERS: User[] = [
+  {
+    id: 'U-1001',
+    name: 'Rahul Sharma',
+    email: 'demo@stocksense.app',
+    role: 'Inventory Manager',
+    title: 'Inventory Manager',
+    initials: 'RS',
+    auditorId: '8821',
+    active: true,
+  },
+  {
+    id: 'U-1002',
+    name: 'Priya Patel',
+    email: 'priya@stocksense.app',
+    role: 'Warehouse Staff',
+    title: 'Warehouse Associate',
+    initials: 'PP',
+    auditorId: '8834',
+    active: true,
+  },
+  {
+    id: 'U-1003',
+    name: 'Arjun Verma',
+    email: 'arjun@stocksense.app',
+    role: 'Floor Supervisor',
+    title: 'Floor Supervisor',
+    initials: 'AV',
+    auditorId: '8840',
+    active: true,
+  },
+  {
+    id: 'U-1004',
+    name: 'Sana Kapoor',
+    email: 'admin@stocksense.app',
+    role: 'Admin',
+    title: 'Systems Administrator',
+    initials: 'SK',
+    auditorId: '8801',
+    active: true,
+  },
+];
+
+const SEED_PASSWORDS: Record<string, string> = {
+  'U-1001': 'Demo@1234',
+  'U-1002': 'Demo@1234',
+  'U-1003': 'Demo@1234',
+  'U-1004': 'Admin@1234',
+};
+
+const SEED_CREDENTIALS: CredentialRecord[] = SEED_USERS.map((u) => ({
+  userId: u.id,
+  ...hashPassword(SEED_PASSWORDS[u.id] ?? 'Demo@1234'),
+}));
+
 export function buildSeed(): Database {
   return {
-    version: 1,
+    version: SEED_VERSION,
     settings: {
       valuationMethod: 'FIFO',
       removalStrategy: 'FIFO',
@@ -13,26 +80,8 @@ export function buildSeed(): Database {
       dualSignoffVariancePct: 2.5,
       currency: '₹',
     },
-    users: [
-      {
-        name: 'Rahul Sharma',
-        role: 'Inventory Manager',
-        initials: 'RS',
-        auditorId: '8821',
-      },
-      {
-        name: 'Priya Patel',
-        role: 'Warehouse Staff',
-        initials: 'PP',
-        auditorId: '8834',
-      },
-      {
-        name: 'Adele Vance',
-        role: 'Floor Supervisor',
-        initials: 'AV',
-        auditorId: '8840',
-      },
-    ],
+    users: SEED_USERS,
+    credentials: SEED_CREDENTIALS,
     warehouses: [
       {
         code: 'WH-01',

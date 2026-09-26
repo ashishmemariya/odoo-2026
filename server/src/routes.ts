@@ -16,25 +16,81 @@ import {
   totalStock,
 } from './engine.js';
 import { runScenarioStep, scenarioState } from './scenario.js';
+import {
+  SESSION_TTL_MS,
+  activeSessionCount,
+  attachUser,
+  currentUser,
+  destroySession,
+  login,
+  permissionsFor,
+  requireAuth,
+  requirePermission,
+} from './auth.js';
 import type { Product, User } from './types.js';
 
 export const api = Router();
+
+// Resolve `req.user` when a token is present. Read endpoints stay open so the
+// sign-in screen and demo directory can load; mutations below require a session.
+api.use(attachUser);
 
 /* ---------------------------- meta ---------------------------- */
 
 api.get('/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-api.get('/snapshot', (_req, res) => {
-  const db = getDb();
+api.get('/snapshot', (req, res) => {
+  const { credentials, ...safe } = getDb();
   res.json({
-    ...db,
-    products: db.products.map(productView),
+    ...safe,
+    products: safe.products.map(productView),
     dashboard: dashboardSummary(),
     scenario: scenarioState(),
+    me: req.user ? { user: req.user, permissions: permissionsFor(req.user.role) } : null,
   });
 });
 
-api.post('/reset', (_req, res) => {
+/* ---------------------------- auth ---------------------------- */
+
+api.post('/auth/login', (req, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!email || !password) {
+    throw new HttpError(400, 'Enter both your email address and password.');
+  }
+  const result = login(email, password);
+  res.json({ ...result, expiresInMs: SESSION_TTL_MS });
+});
+
+api.post('/auth/logout', (req, res) => {
+  const token = req.get('authorization')?.slice(7).trim();
+  if (token) destroySession(token);
+  res.json({ ok: true });
+});
+
+api.get('/auth/session', requireAuth, (req, res) => {
+  const user = currentUser(req);
+  res.json({ user, permissions: permissionsFor(user.role) });
+});
+
+/** Demo helper: the directory shown on the sign-in screen. Passwords are never returned. */
+api.get('/auth/directory', (_req, res) => {
+  res.json(
+    getDb()
+      .users.filter((u) => u.active)
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        title: u.title,
+        initials: u.initials,
+      })),
+  );
+});
+
+api.post('/reset', requirePermission('demo.reset'), (_req, res) => {
+  // Seeded user IDs are stable, so existing sessions stay valid across a reset.
   resetDb();
   res.json({ ok: true, message: 'Seed data restored' });
 });
@@ -45,7 +101,41 @@ api.get('/users', (_req, res) => res.json(getDb().users));
 
 api.get('/settings', (_req, res) => res.json(getDb().settings));
 
-api.patch('/settings', (req, res) => {
+/**
+ * Admin-only operational view. This is the ONLY place backend guardrails are
+ * described in technical terms; the rest of the UI speaks business language.
+ */
+api.get('/diagnostics', requirePermission('diagnostics.view'), (_req, res) => {
+  const db = getDb();
+  res.json({
+    runtime: {
+      node: process.version,
+      uptimeSeconds: Math.round(process.uptime()),
+      storage: 'Single-file JSON document store',
+      seedVersion: db.version,
+    },
+    counts: {
+      products: db.products.length,
+      locations: db.locations.length,
+      warehouses: db.warehouses.length,
+      receipts: db.receipts.length,
+      deliveries: db.deliveries.length,
+      transfers: db.transfers.length,
+      adjustments: db.adjustments.length,
+      ledgerEntries: db.ledger.length,
+      activeSessions: activeSessionCount(),
+    },
+    guardrails: [
+      { id: 'zero-floor', label: 'Negative stock prevention', active: db.settings.preventNegativeStock },
+      { id: 'dual-signoff', label: 'Dual approval on count variance', active: db.settings.dualSignoffVariancePct > 0, thresholdPct: db.settings.dualSignoffVariancePct },
+      { id: 'transfer-zero', label: 'Transfers are net-zero across the network', active: true },
+      { id: 'append-only', label: 'Stock ledger is append-only', active: true },
+      { id: 'hierarchy', label: 'Container locations roll up to their parent', active: true },
+    ],
+  });
+});
+
+api.patch('/settings', requirePermission('settings.manage'), (req, res) => {
   const db = getDb();
   db.settings = { ...db.settings, ...req.body };
   commit();
@@ -140,9 +230,9 @@ api.get('/receipt', (req, res) => {
   });
 });
 
-api.post('/receipt/validate', (req, res) => {
+api.post('/receipt/validate', requirePermission('receipt.post'), (req, res) => {
   const ref = String(req.query.ref ?? req.body?.ref ?? '');
-  const { doc, entries } = postReceipt(ref, String(req.body?.user ?? 'System'));
+  const { doc, entries } = postReceipt(ref, currentUser(req).name);
   res.json({ ok: true, receipt: doc, ledger: entries });
 });
 
@@ -184,9 +274,9 @@ api.get('/delivery', (req, res) => {
   });
 });
 
-api.post('/delivery/validate', (req, res) => {
+api.post('/delivery/validate', requirePermission('delivery.post'), (req, res) => {
   const ref = String(req.query.ref ?? req.body?.ref ?? '');
-  const { doc, entries } = postDelivery(ref, String(req.body?.user ?? 'System'));
+  const { doc, entries } = postDelivery(ref, currentUser(req).name);
   res.json({ ok: true, delivery: doc, ledger: entries });
 });
 
@@ -194,8 +284,8 @@ api.post('/delivery/validate', (req, res) => {
 
 api.get('/transfers', (_req, res) => res.json(getDb().transfers));
 
-api.post('/transfers', (req, res) => {
-  const { from, to, sku, qty, requestedBy } = req.body ?? {};
+api.post('/transfers', requirePermission('transfer.create'), (req, res) => {
+  const { from, to, sku, qty } = req.body ?? {};
   const db = getDb();
   const p = findProduct(String(sku));
   if (!p) throw new HttpError(404, `SKU ${sku} not found`);
@@ -211,7 +301,7 @@ api.post('/transfers', (req, res) => {
     to,
     sku: p.sku,
     qty: amount,
-    requestedBy: requestedBy ?? 'System',
+    requestedBy: currentUser(req).name,
     status: 'Draft' as const,
     createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
   };
@@ -220,8 +310,8 @@ api.post('/transfers', (req, res) => {
   res.json(doc);
 });
 
-api.post('/transfer/execute', (req, res) => {
-  const { doc, entry } = postTransfer(String(req.query.ref ?? ''), String(req.body?.user ?? 'System'));
+api.post('/transfer/execute', requirePermission('transfer.post'), (req, res) => {
+  const { doc, entry } = postTransfer(String(req.query.ref ?? ''), currentUser(req).name);
   res.json({ ok: true, transfer: doc, ledger: entry });
 });
 
@@ -231,8 +321,8 @@ api.get('/adjustments', (_req, res) =>
   res.json(getDb().adjustments.map((a) => ({ ...a, dualSignoff: requiresDualSignoff(a) }))),
 );
 
-api.post('/adjustments', (req, res) => {
-  const { sku, location, recorded, counted, reason, memo, auditor } = req.body ?? {};
+api.post('/adjustments', requirePermission('adjustment.create'), (req, res) => {
+  const { sku, location, recorded, counted, reason, memo } = req.body ?? {};
   const db = getDb();
   const p = findProduct(String(sku));
   if (!p) throw new HttpError(404, `SKU ${sku} not found`);
@@ -246,7 +336,7 @@ api.post('/adjustments', (req, res) => {
     delta: Number(counted) - Number(recorded),
     reason: reason ?? 'Other',
     memo: memo ?? '',
-    auditor: auditor ?? 'System',
+    auditor: currentUser(req).name,
     state: 'Pending Approval' as const,
     valuationImpact: (Number(counted) - Number(recorded)) * p.unitCost,
     createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -256,13 +346,13 @@ api.post('/adjustments', (req, res) => {
   res.json(doc);
 });
 
-api.post('/adjustment/post', (req, res) => {
+api.post('/adjustment/post', requirePermission('adjustment.approve'), (req, res) => {
   const { doc, entry } = postAdjustment({
     ref: String(req.query.ref ?? ''),
     counted: Number(req.body?.counted ?? 0),
     reason: req.body?.reason,
     memo: req.body?.memo ?? '',
-    user: String(req.body?.user ?? 'System'),
+    user: currentUser(req).name,
   });
   res.json({ ok: true, adjustment: doc, ledger: entry });
 });
@@ -288,12 +378,12 @@ api.get('/locations', (_req, res) => res.json(getDb().locations));
 
 api.get('/scenario', (_req, res) => res.json(scenarioState()));
 
-api.post('/scenario/run', (req, res) => {
-  const result = runScenarioStep(String(req.body?.user ?? 'System'));
+api.post('/scenario/run', requirePermission('transfer.post'), (req, res) => {
+  const result = runScenarioStep(currentUser(req).name);
   res.json({ ...result, snapshot: { products: getDb().products.map((p) => ({ ...p, total: totalStock(p) })), ledger: getDb().ledger, dashboard: dashboardSummary() } });
 });
 
-api.post('/scenario/reset', (_req, res) => {
+api.post('/scenario/reset', requirePermission('demo.reset'), (_req, res) => {
   resetDb();
   res.json(scenarioState());
 });
