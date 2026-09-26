@@ -110,7 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> => {
       try {
         const res = await api.login(email, password);
         writeToken(res.token);
@@ -214,4 +214,14 @@ export function useSnap(): Snapshot {
   const { snap } = useApp();
   if (!snap) throw new Error('Snapshot not loaded');
   return snap;
+}
+
+/**
+ * The signed-in user with the null case removed. Only valid inside the
+ * authenticated shell, which is the only place these pages are mounted.
+ */
+export function useUser(): User {
+  const { user } = useApp();
+  if (!user) throw new Error('useUser must be used inside the authenticated shell');
+  return user;
 }

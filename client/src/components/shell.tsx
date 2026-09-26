@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useApp } from '../store';
+import type { Permission } from '../types';
 import { Icon } from './ui';
 
 interface NavItem {
@@ -8,31 +9,36 @@ interface NavItem {
   label: string;
   icon: string;
   end?: boolean;
+  /** Hidden when the signed-in role lacks this capability. */
+  requires?: Permission;
 }
 
 const NAV: { section: string; items: NavItem[] }[] = [
-  { section: 'Overview', items: [{ to: '/', label: 'Dashboard', icon: 'space_dashboard', end: true }] },
+  {
+    section: 'Overview',
+    items: [{ to: '/', label: 'Dashboard', icon: 'space_dashboard', end: true }],
+  },
   {
     section: 'Inventory',
     items: [
-      { to: '/products', label: 'Products & Stock', icon: 'inventory_2' },
-      { to: '/ledger', label: 'Move History', icon: 'receipt_long' },
-      { to: '/counts', label: 'Physical Counts', icon: 'fact_check' },
+      { to: '/products', label: 'Products & Stock', icon: 'inventory_2', requires: 'product.view' },
+      { to: '/ledger', label: 'Move History', icon: 'receipt_long', requires: 'ledger.view' },
+      { to: '/counts', label: 'Physical Counts', icon: 'fact_check', requires: 'count.view' },
     ],
   },
   {
     section: 'Operations',
     items: [
-      { to: '/receipts', label: 'Receipts', icon: 'move_to_inbox' },
-      { to: '/deliveries', label: 'Deliveries', icon: 'local_shipping' },
-      { to: '/transfers', label: 'Transfers', icon: 'swap_horiz' },
+      { to: '/receipts', label: 'Receipts', icon: 'move_to_inbox', requires: 'receipt.view' },
+      { to: '/deliveries', label: 'Deliveries', icon: 'local_shipping', requires: 'delivery.view' },
+      { to: '/transfers', label: 'Transfers', icon: 'swap_horiz', requires: 'transfer.view' },
     ],
   },
   {
     section: 'Network',
     items: [
-      { to: '/warehouse', label: 'Warehouses', icon: 'warehouse' },
-      { to: '/settings', label: 'Settings', icon: 'tune' },
+      { to: '/warehouse', label: 'Warehouses', icon: 'warehouse', requires: 'product.view' },
+      { to: '/settings', label: 'Settings', icon: 'tune', requires: 'settings.manage' },
     ],
   },
 ];
@@ -40,7 +46,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
 const MOBILE_NAV = NAV.flatMap((g) => g.items);
 
 export function SideNav() {
-  const { snap, user } = useApp();
+  const { snap, user, can } = useApp();
   const loc = useLocation();
   const active = loc.pathname;
 
@@ -59,34 +65,36 @@ export function SideNav() {
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-2.5 pb-3">
-        {NAV.map((group) => (
-          <div key={group.section}>
-            <p className="px-2 pb-1.5 text-[10px] font-bold tracking-[0.12em] text-outline uppercase">
-              {group.section}
-            </p>
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const on = item.end ? active === item.to : active.startsWith(item.to);
-                return (
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={item.end ?? false}
-                      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold transition ${
-                        on
-                          ? 'bg-primary-container/12 text-primary'
-                          : 'text-on-surface/70 hover:bg-surface-low hover:text-on-surface'
-                      }`}
-                    >
-                      <Icon name={item.icon} size={18} fill={on} />
-                      <span className="truncate">{item.label}</span>
-                    </NavLink>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+        {NAV.map((group) => {
+          const visible = group.items.filter((item) => !item.requires || can(item.requires));
+          if (visible.length === 0) return null;
+          return (
+            <div key={group.section}>
+              <p className="px-2 pb-1.5 text-[10px] font-bold tracking-[0.12em] text-outline uppercase">
+                {group.section}
+              </p>
+              <ul className="space-y-0.5">
+                {visible.map((item) => {
+                  const on = item.end ? active === item.to : active.startsWith(item.to);
+                  return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={item.end ?? false}
+                        className={`flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] font-semibold transition ${
+                          on ? 'bg-accent text-primary' : 'text-outline hover:bg-surface-low hover:text-on-surface'
+                        }`}
+                      >
+                        <Icon name={item.icon} size={18} fill={on} />
+                        <span className="truncate">{item.label}</span>
+                      </NavLink>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </div>
 
       {snap && (
@@ -114,12 +122,12 @@ export function SideNav() {
       )}
 
       <div className="flex items-center gap-2.5 border-t border-outline-variant px-3.5 py-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-tertiary text-[11px] font-bold text-on-tertiary">
-          {user.initials}
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-on-primary">
+          {user?.initials}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-[12.5px] font-bold">{user.name}</p>
-          <p className="truncate text-[10.5px] text-on-surface/50">{user.role}</p>
+          <p className="truncate text-[12.5px] font-bold">{user?.name}</p>
+          <p className="truncate text-[10.5px] text-outline">{user?.role}</p>
         </div>
       </div>
     </nav>
@@ -150,7 +158,7 @@ export function MobileNav() {
 }
 
 export function TopNav() {
-  const { user, setUser, snap, refresh, busy, notify } = useApp();
+  const { user, signOut, snap, refresh, busy, notify } = useApp();
   const [q, setQ] = useState('');
   const [picker, setPicker] = useState(false);
 
@@ -240,14 +248,16 @@ export function TopNav() {
         <div className="relative">
           <button
             onClick={() => setPicker((v) => !v)}
-            className="flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-low px-2 py-1.5 hover:bg-surface-container"
+            aria-haspopup="menu"
+            aria-expanded={picker}
+            className="flex items-center gap-2 rounded-control border border-outline-variant bg-surface-low px-2 py-1.5 hover:bg-surface-container"
           >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-tertiary text-[10px] font-bold text-on-tertiary">
-              {user.initials}
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-on-primary">
+              {user?.initials}
             </span>
             <span className="hidden text-left sm:block">
-              <span className="block text-[11.5px] leading-tight font-bold">{user.name}</span>
-              <span className="block text-[9.5px] leading-tight text-on-surface/50">{user.role}</span>
+              <span className="block text-[11.5px] leading-tight font-bold">{user?.name}</span>
+              <span className="block text-[9.5px] leading-tight text-outline">{user?.role}</span>
             </span>
             <Icon name="expand_more" size={16} className="text-outline" />
           </button>
@@ -256,40 +266,45 @@ export function TopNav() {
             <>
               <button
                 className="fixed inset-0 z-40 cursor-default"
-                aria-label="Close"
+                aria-label="Close menu"
                 onClick={() => setPicker(false)}
               />
-              <div className="animate-pop absolute right-0 z-50 mt-1 w-64 overflow-hidden rounded-xl border border-outline-variant bg-surface-lowest shadow-xl">
-                <p className="border-b border-outline-variant px-3 py-2 text-[10px] font-bold tracking-[0.12em] text-outline uppercase">
-                  Act as
-                </p>
-                {snap?.users.map((u) => (
-                  <button
-                    key={u.name}
-                    onClick={() => {
-                      setUser(u);
-                      setPicker(false);
-                      notify({ kind: 'info', title: `Signed in as ${u.name}`, detail: u.role });
-                    }}
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-surface-low ${
-                      u.name === user.name ? 'bg-surface-container' : ''
-                    }`}
-                  >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-tertiary text-[10px] font-bold text-on-tertiary">
-                      {u.initials}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12.5px] font-semibold">{u.name}</span>
-                      <span className="block truncate text-[10.5px] text-on-surface/50">
-                        {u.role} · ID {u.auditorId}
-                      </span>
-                    </span>
-                    {u.name === user.name && <Icon name="check" size={16} className="text-success" />}
-                  </button>
-                ))}
-                <div className="border-t border-outline-variant px-3 py-2 text-[10.5px] text-on-surface/50">
-                  Every stock move is signed with the active user.
+              <div
+                role="menu"
+                className="animate-pop absolute right-0 z-50 mt-1 w-64 overflow-hidden rounded-panel border border-outline-variant bg-surface-lowest shadow-xl"
+              >
+                <div className="border-b border-outline-variant px-3 py-2.5">
+                  <p className="truncate text-[12.5px] font-bold">{user?.name}</p>
+                  <p className="truncate text-[10.5px] text-outline">{user?.email}</p>
+                  <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-primary">
+                    <Icon name="badge" size={12} /> {user?.role}
+                  </p>
                 </div>
+
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setPicker(false);
+                    void signOut();
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[12.5px] font-semibold hover:bg-surface-low"
+                >
+                  <Icon name="logout" size={17} /> Sign out
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setPicker(false);
+                    void signOut();
+                  }}
+                  className="flex w-full items-center gap-2.5 border-t border-outline-variant px-3 py-2.5 text-left text-[12.5px] font-semibold hover:bg-surface-low"
+                >
+                  <Icon name="switch_account" size={17} /> Switch account
+                </button>
+
+                <p className="border-t border-outline-variant px-3 py-2 text-[10.5px] leading-relaxed text-outline">
+                  Stock movements are signed with your account, not a chosen identity.
+                </p>
               </div>
             </>
           )}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { useApp } from '../store';
+import { useApp, useUser } from '../store';
 import {
   Badge,
   Card,
@@ -183,7 +183,8 @@ export default function Deliveries() {
 export function DeliveryDetail() {
   const { ref = '' } = useParams();
   const decoded = decodeURIComponent(ref);
-  const { snap, user, run, busy } = useApp();
+  const { snap, run, busy } = useApp();
+  const user = useUser();
   const [doc, setDoc] = useState<Delivery | null>(null);
   const [err, setErr] = useState<string | null>(null);
 

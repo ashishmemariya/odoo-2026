@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { useApp } from '../store';
+import { useApp, useUser } from '../store';
 import { Drawer } from '../components/overlays';
 import {
   Badge,
@@ -16,7 +16,8 @@ import {
 } from '../components/ui';
 
 export default function Transfers() {
-  const { snap, user, run, busy } = useApp();
+  const { snap, run, busy } = useApp();
+  const user = useUser();
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -54,7 +55,7 @@ export default function Transfers() {
     if (!from || !to || !sku || !qty) return;
     const res = await run(
       `Transfer request ${sku}`,
-      () => api.createTransfer({ from, to, sku, qty: Number(qty), requestedBy: user.name }),
+      () => api.createTransfer({ from, to, sku, qty: Number(qty)}),
       { success: 'Transfer drafted' },
     );
     if (res) {

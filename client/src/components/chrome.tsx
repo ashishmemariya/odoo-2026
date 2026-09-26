@@ -60,12 +60,12 @@ export function Toasts() {
  * mutation, so the numbers on screen are the numbers the server holds.
  */
 export function ScenarioBar() {
-  const { snap, run, busy, user } = useApp();
+  const { snap, run, busy } = useApp();
   const sc = snap?.scenario;
   if (!sc) return null;
 
   const onRun = () =>
-    void run('Scenario step', () => api.runScenario(user.name), { success: 'Scenario advanced' });
+    void run('Scenario step', () => api.runScenario(), { success: 'Scenario advanced' });
 
   const onReset = () =>
     void run('Demo reset', () => api.reset(), { success: 'Seed data restored' });

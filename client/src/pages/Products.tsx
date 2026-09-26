@@ -335,7 +335,7 @@ function QuickAdjustDrawer({
   onClose: () => void;
   busy: boolean;
 }) {
-  const { snap, user, run } = useApp();
+  const { snap, run } = useApp();
   const [loc, setLoc] = useState('');
   const [counted, setCounted] = useState('');
   const [reason, setReason] = useState('Scrap / Wear & Tear');
@@ -360,15 +360,12 @@ function QuickAdjustDrawer({
           recorded: bookQty,
           counted: Number(counted),
           reason,
-          memo,
-          auditor: user.name,
-        });
+          memo});
         return api.postAdjustment({
           ref: created.ref,
           counted: Number(counted),
           reason: reason as never,
-          memo,
-          user: user.name,
+          memo
         });
       },
       { success: `Count posted for ${p.sku}` },
@@ -586,7 +583,7 @@ function HistoryModal({ product, onClose }: { product: Product | null; onClose: 
 
 export function ProductDetail() {
   const { sku = '' } = useParams();
-  const { snap, user, run, busy } = useApp();
+  const { snap, run, busy } = useApp();
   const [loc, setLoc] = useState('');
   const [counted, setCounted] = useState('');
   const [reason, setReason] = useState('Incorrect Entry / Counting Error');
@@ -820,15 +817,12 @@ export function ProductDetail() {
                         recorded: bookQty,
                         counted: Number(counted),
                         reason,
-                        memo,
-                        auditor: user.name,
-                      });
+                        memo});
                       return api.postAdjustment({
                         ref: created.ref,
                         counted: Number(counted),
                         reason: reason as never,
-                        memo,
-                        user: user.name,
+                        memo
                       });
                     },
                     { success: `Count posted for ${p.sku}` },

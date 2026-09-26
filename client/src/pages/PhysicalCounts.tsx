@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { useApp } from '../store';
+import { useApp, useUser } from '../store';
 import { Modal } from '../components/overlays';
 import {
   Badge,
@@ -27,7 +27,8 @@ const REASONS: AdjustmentReason[] = [
 ];
 
 export default function PhysicalCounts() {
-  const { snap, user, run, busy } = useApp();
+  const { snap, run, busy } = useApp();
+  const user = useUser();
   const [approving, setApproving] = useState<Adjustment | null>(null);
   const [counted, setCounted] = useState('');
   const [reason, setReason] = useState<AdjustmentReason>('Scrap / Wear & Tear');
@@ -216,8 +217,7 @@ export default function PhysicalCounts() {
                       ref: open.ref,
                       counted: Number(counted),
                       reason,
-                      memo,
-                      user: user.name,
+                      memo
                     }),
                   { success: `${open.ref} posted to the ledger` },
                 ).then((r) => {
