@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Attention } from '../types';
 
 /* ------------------------------------------------------------------ *
  * Status pills — colour language carried over from the wireframes
@@ -78,6 +79,35 @@ export function StatusStepper({
         );
       })}
     </ol>
+  );
+}
+
+/**
+ * The status trio used on every document header: where it is in the flow, and
+ * whether it needs a human — attention is rendered as a separate flag, never as
+ * a status of its own.
+ */
+export function DocStatusRow({
+  doc,
+  flow,
+  className = '',
+}: {
+  doc: { status?: string; state?: string; attention?: Attention | null; stepIndex: number; stepCount: number };
+  flow: readonly string[];
+  className?: string;
+}) {
+  const status = doc.status ?? doc.state ?? '';
+  const attention = doc.attention;
+  const showStepper = doc.stepCount > 1;
+  return (
+    <div className={`flex flex-col items-end gap-1.5 ${className}`}>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <StatusBadge value={status} dot />
+        {attention && <AttentionBadge kind={attention.kind} daysLate={attention.daysLate} />}
+      </div>
+      {showStepper && <StatusStepper flow={flow} stepIndex={doc.stepIndex} stepCount={doc.stepCount} />}
+      {attention && <span className="text-[11px] text-on-surface/55">{attention.message}</span>}
+    </div>
   );
 }
 

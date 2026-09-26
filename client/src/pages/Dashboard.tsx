@@ -59,16 +59,28 @@ export default function Dashboard() {
       cta: p.total === 0 ? 'Replenish' : 'Review',
     })),
     ...snap.deliveries
-      .filter((x) => x.status === 'Overdue')
+      .filter((x) => x.attention?.kind === 'Overdue')
       .slice(0, 2)
       .map((x) => ({
         key: x.ref,
         to: `/deliveries/${encodeURIComponent(x.ref)}`,
         icon: 'warning',
         title: `${x.ref} overdue`,
-        meta: `${x.items.length} line(s) to ${x.contact} · scheduled ${x.scheduledDate}`,
-        status: 'Overdue' as const,
+        meta: `${x.items.length} line(s) to ${x.contact} · ${x.attention?.message ?? ''}`,
+        status: x.status,
         cta: 'Reallocate',
+      })),
+    ...snap.receipts
+      .filter((x) => x.attention?.kind === 'Overdue')
+      .slice(0, 1)
+      .map((x) => ({
+        key: x.ref,
+        to: `/receipts/${encodeURIComponent(x.ref)}`,
+        icon: 'warning',
+        title: `${x.ref} overdue`,
+        meta: `${x.items.length} line(s) from ${x.supplier} · ${x.attention?.message ?? ''}`,
+        status: x.status,
+        cta: 'Chase',
       })),
     ...snap.adjustments
       .filter((a) => a.state === 'Pending Approval')

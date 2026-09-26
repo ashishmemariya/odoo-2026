@@ -35,6 +35,28 @@ export interface StatusFlows {
   transfer: readonly string[];
   adjustment: readonly string[];
 }
+
+export interface DocColumn {
+  key: string;
+  label: string;
+  icon: string;
+}
+
+/**
+ * `Overdue` is not a board column or a status — it is the derived attention
+ * lane, so it matches on `attention` rather than on the stored status.
+ */
+export function isAttentionKey(key: string): key is 'Overdue' {
+  return key === 'Overdue';
+}
+
+export function docMatchesColumn(
+  doc: { status?: string; state?: string; attention?: Attention | null },
+  key: string,
+): boolean {
+  if (isAttentionKey(key)) return doc.attention?.kind === 'Overdue';
+  return (doc.status ?? doc.state) === key;
+}
 export type LedgerType =
   | 'OPENING'
   | 'RECEIPT'

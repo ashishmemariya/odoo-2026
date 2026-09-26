@@ -51,9 +51,15 @@ api.get('/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOStrin
 
 api.get('/snapshot', (req, res) => {
   const { credentials, ...safe } = getDb();
+  const now = Date.now();
   res.json({
     ...safe,
     products: safe.products.map(productView),
+    // documents carry the derived attention flag + step position
+    receipts: safe.receipts.map((r) => receiptView(r, now)),
+    deliveries: safe.deliveries.map((d) => deliveryView(d, now)),
+    transfers: safe.transfers.map((t) => transferView(t, now)),
+    adjustments: safe.adjustments.map((a) => adjustmentView(a, now)),
     dashboard: dashboardSummary(),
     scenario: scenarioState(),
     me: req.user ? { user: req.user, permissions: permissionsFor(req.user.role) } : null,
