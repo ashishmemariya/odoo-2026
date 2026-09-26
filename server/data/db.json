@@ -53,23 +53,23 @@
   "credentials": [
     {
       "userId": "U-1001",
-      "salt": "941436bf4eccaf05525444c1073d8ce7",
-      "hash": "79ff395ced6a4ac07b14f27bc35d0c135d9486b5bcf73013e28460644190a1cf940c2bc8cdf30674b472f7ed723a7adc752dad677cca3265ddfd5ed3994e3d67"
+      "salt": "f8f7f716b32cab256e194e383c4270b3",
+      "hash": "3bf76c75eb0925dc6ead289aa5382f0b3bd5e8a8dee2cb33a8e71725906f374302401f8b7d68b160d4cc446c0350246e85c7ff75d6c56723d08cad92f0b7299d"
     },
     {
       "userId": "U-1002",
-      "salt": "ee7a6177abf2e84633712f77861571de",
-      "hash": "7bac10d72377b2ca01317d68af3091131917c6d257c9920dbe55957e9e410378e7f16f3a9a8e94796a0eae9559130b686cd7b10e31a876ad6bbabb30bf48efcc"
+      "salt": "05685ff4a10c5b6a16ebee6c6596382e",
+      "hash": "51e9226f82ef6515ec126d13f0bec43cef6bc92bd96408ffa93279c5794f29fb2fe6b4d7d81f008a5122c6405509449c8c8ed81c2846daa6c60d4ff1dff7509e"
     },
     {
       "userId": "U-1003",
-      "salt": "80dfe804ed6184a9055903328cfd7fde",
-      "hash": "0eb105d84d4baa641d84e7a2353e72dcb73963da219c04597cbaa93f14c0523b5e162c970d7ea32808c8be53c8c7119b2072850b34c71fd2a1cb774451bbaa2e"
+      "salt": "6c32a0818824aa5f04629de182064c87",
+      "hash": "e0940915fbf6945acd2678f1875fe63221b919f8ace8f6803997006a4fe5d25ffc9f6a534bf1e5cb72ffb6ad381fc9498b0c1522e0b6210155636bf027e16c5c"
     },
     {
       "userId": "U-1004",
-      "salt": "8b2b11c8dca7f97db965851c66bd1e56",
-      "hash": "cc14e36a496f8cf8ff5db57f6493cc8bf5f7c7fc0fc916d1afc6b1c54776207e7b22b21f6c95df72038d8eb5537607fcaaf0c07d4d6d0e3c1dbceeae20470a42"
+      "salt": "8f0ee41130a75657ff2a8c8252bd46e9",
+      "hash": "36cfbdbfc26a32b41757b6ae33b08ad9fa49c0909127befab5bf6123c78eb14f73a5a1111a633924baf34de6ba5379ab757d4170ce628bc3f75153d54c4e0edf"
     }
   ],
   "warehouses": [
@@ -358,7 +358,7 @@
       "scheduledDate": "2026-03-02 10:30",
       "carrier": "SwiftTrans Logistics #44",
       "dockBay": "BAY-02 North",
-      "status": "Done",
+      "status": "Ready",
       "items": [
         {
           "sku": "STL-ROD-12",
@@ -371,8 +371,7 @@
       ],
       "notes": "Pallets intact (2/2). Zero transit damage. Security seal matched.",
       "createdAt": "2026-03-02 08:15",
-      "createdBy": "Rahul Sharma",
-      "postedAt": "2026-09-26 14:08:47"
+      "createdBy": "Rahul Sharma"
     },
     {
       "ref": "RC-1002",
@@ -475,7 +474,7 @@
       "notes": "Dispatch validated against released work order. POD captured.",
       "createdAt": "2026-03-04 07:40",
       "createdBy": "Rahul Sharma",
-      "postedAt": "2026-09-26 14:08:47"
+      "postedAt": "2026-09-26 14:12:16"
     },
     {
       "ref": "WH/OUT/0002",
@@ -594,7 +593,7 @@
       "sku": "STL-ROD-12",
       "qty": 100,
       "requestedBy": "Priya Patel",
-      "status": "Done",
+      "status": "Waiting",
       "createdAt": "2026-03-02 11:20"
     },
     {
@@ -623,16 +622,15 @@
       "ref": "ADJ-4001",
       "sku": "STL-ROD-12",
       "location": "WH-Production",
-      "recorded": 80,
-      "counted": 77,
-      "delta": -3,
+      "recorded": 97,
+      "counted": 97,
+      "delta": 0,
       "reason": "Scrap / Wear & Tear",
       "memo": "Drill: count variance written to the ledger.",
-      "auditor": "Sana Kapoor",
-      "state": "Posted",
+      "auditor": "Rahul Sharma",
+      "state": "Reconciled",
       "valuationImpact": -3630,
-      "createdAt": "2026-03-04 16:40",
-      "postedAt": "2026-09-26 14:08:47"
+      "createdAt": "2026-03-04 16:40"
     },
     {
       "ref": "ADJ-4002",

@@ -20,7 +20,6 @@ import {
   SESSION_TTL_MS,
   activeSessionCount,
   attachUser,
-  clearSessions,
   currentUser,
   destroySession,
   login,
@@ -394,8 +393,8 @@ api.post('/scenario/start-drill', requirePermission('demo.reset'), (req, res) =>
 
 /** Restores the canonical seeded system — the live state with 77 kg on hand. */
 api.post('/scenario/reset', requirePermission('demo.reset'), (_req, res) => {
+  // Seeded user IDs are stable across a reseed, so open sessions stay valid here too.
   resetDb();
-  clearSessions();
   res.json(scenarioState());
 });
 
