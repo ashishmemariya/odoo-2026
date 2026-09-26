@@ -15,7 +15,9 @@ export default function Dashboard() {
     {
       label: 'Inventory value',
       value: money(d.valuation, snap.settings.currency),
-      sub: `${d.catalogSkus} active SKUs · ${d.totalOnHand.toLocaleString('en-IN')} units on hand`,
+      // Quantities span kg, units and rolls, so the total is deliberately not
+      // labelled "units" — that would misstate eight of the ten SKUs.
+      sub: `${d.catalogSkus} active SKUs · ${d.totalOnHand.toLocaleString('en-IN')} on hand (mixed UoM)`,
       icon: 'account_balance_wallet',
       tone: 'plum' as const,
       to: '/products',

@@ -53,23 +53,23 @@
   "credentials": [
     {
       "userId": "U-1001",
-      "salt": "f8f7f716b32cab256e194e383c4270b3",
-      "hash": "3bf76c75eb0925dc6ead289aa5382f0b3bd5e8a8dee2cb33a8e71725906f374302401f8b7d68b160d4cc446c0350246e85c7ff75d6c56723d08cad92f0b7299d"
+      "salt": "a70005c77a688fd0e05ed985f9c19f47",
+      "hash": "7c2183a50f0fa90e5f6cf5574df4aa25654fc000a43749e2670ec5786ad51aafc0cb1f31c9dc2dc111b2d617a54e87bdaec56fcc9c59a164633d0c45cca60633"
     },
     {
       "userId": "U-1002",
-      "salt": "05685ff4a10c5b6a16ebee6c6596382e",
-      "hash": "51e9226f82ef6515ec126d13f0bec43cef6bc92bd96408ffa93279c5794f29fb2fe6b4d7d81f008a5122c6405509449c8c8ed81c2846daa6c60d4ff1dff7509e"
+      "salt": "09d3b83569772dfea09d5c14488e1df4",
+      "hash": "c999e1bbfe5662cd0c5a6cad52bf3d975875566ee6fcaa81f312b707db702849606ddaa45340519bd42f30aab68fe5f667a7fdf41597c048ba9dd0bafd91b717"
     },
     {
       "userId": "U-1003",
-      "salt": "6c32a0818824aa5f04629de182064c87",
-      "hash": "e0940915fbf6945acd2678f1875fe63221b919f8ace8f6803997006a4fe5d25ffc9f6a534bf1e5cb72ffb6ad381fc9498b0c1522e0b6210155636bf027e16c5c"
+      "salt": "d15c05cbafe75da5deca13df26b89896",
+      "hash": "105a3f64c64be743f7aaa03d4e904c72c6190d6a1f8cffec5a47a2a767d385bd39f8d0df95116d2b369f0e72d1ece1405fe772035d19444ab5e970b6dc5039a7"
     },
     {
       "userId": "U-1004",
-      "salt": "8f0ee41130a75657ff2a8c8252bd46e9",
-      "hash": "36cfbdbfc26a32b41757b6ae33b08ad9fa49c0909127befab5bf6123c78eb14f73a5a1111a633924baf34de6ba5379ab757d4170ce628bc3f75153d54c4e0edf"
+      "salt": "4634b12f0d78f1997571dbb36e2f7bd7",
+      "hash": "cc4db86b084d0e88e3836b7b3b751c944cfad9cce1461f60215ad2c8cae50c4ba9f6a1647e831a7b57cb98ea3f51f3d66132f4acc4ff699f04686c27090ad693"
     }
   ],
   "warehouses": [
@@ -214,9 +214,7 @@
       "unitCost": 1210,
       "reorderPoint": 30,
       "reserved": 0,
-      "stock": {
-        "WH-Production": 77
-      },
+      "stock": {},
       "icon": "carpenter"
     },
     {
@@ -462,7 +460,7 @@
       "address": "452 Industrial Parkway, Sector 9",
       "scheduledDate": "2026-03-04 14:00",
       "carrier": "BlueDart Express",
-      "status": "Done",
+      "status": "Waiting",
       "operationType": "WH: Delivery Orders (Sales Orders)",
       "items": [
         {
@@ -473,8 +471,7 @@
       ],
       "notes": "Dispatch validated against released work order. POD captured.",
       "createdAt": "2026-03-04 07:40",
-      "createdBy": "Rahul Sharma",
-      "postedAt": "2026-09-26 14:12:16"
+      "createdBy": "Rahul Sharma"
     },
     {
       "ref": "WH/OUT/0002",
@@ -626,7 +623,7 @@
       "counted": 97,
       "delta": 0,
       "reason": "Scrap / Wear & Tear",
-      "memo": "Drill: count variance written to the ledger.",
+      "memo": "Physical count confirmed twice via mechanical scales. Scrap rods set aside for salvage logging.",
       "auditor": "Rahul Sharma",
       "state": "Reconciled",
       "valuationImpact": -3630,
@@ -648,6 +645,76 @@
     }
   ],
   "ledger": [
+    {
+      "id": "LG-0022",
+      "timestamp": "2026-09-26 14:16:56",
+      "type": "REVERSAL",
+      "ref": "RC-1001",
+      "sku": "STL-ROD-12",
+      "name": "Steel Rods 12mm High Tensile",
+      "delta": -100,
+      "from": "WH/Stock/Heavy-Rack-01",
+      "to": "Reversal",
+      "balanceAfter": 0,
+      "user": "Rahul Sharma",
+      "note": "Drill rewind of ADJ-4001 chain."
+    },
+    {
+      "id": "LG-0021",
+      "timestamp": "2026-09-26 14:16:56",
+      "type": "REVERSAL",
+      "ref": "TR-2001",
+      "sku": "STL-ROD-12",
+      "name": "Steel Rods 12mm High Tensile",
+      "delta": 100,
+      "from": "Reversal",
+      "to": "WH/Stock/Heavy-Rack-01",
+      "balanceAfter": 100,
+      "user": "Rahul Sharma",
+      "note": "Drill rewind of ADJ-4001 chain."
+    },
+    {
+      "id": "LG-0020",
+      "timestamp": "2026-09-26 14:16:56",
+      "type": "REVERSAL",
+      "ref": "TR-2001",
+      "sku": "STL-ROD-12",
+      "name": "Steel Rods 12mm High Tensile",
+      "delta": -100,
+      "from": "WH-Production",
+      "to": "Reversal",
+      "balanceAfter": 0,
+      "user": "Rahul Sharma",
+      "note": "Drill rewind of ADJ-4001 chain."
+    },
+    {
+      "id": "LG-0019",
+      "timestamp": "2026-09-26 14:16:56",
+      "type": "REVERSAL",
+      "ref": "WH/OUT/0001",
+      "sku": "STL-ROD-12",
+      "name": "Steel Rods 12mm High Tensile",
+      "delta": 20,
+      "from": "Reversal",
+      "to": "WH-Production",
+      "balanceAfter": 100,
+      "user": "Rahul Sharma",
+      "note": "Drill rewind of ADJ-4001 chain."
+    },
+    {
+      "id": "LG-0018",
+      "timestamp": "2026-09-26 14:16:56",
+      "type": "REVERSAL",
+      "ref": "ADJ-4001",
+      "sku": "STL-ROD-12",
+      "name": "Steel Rods 12mm High Tensile",
+      "delta": 3,
+      "from": "Reversal",
+      "to": "WH-Production",
+      "balanceAfter": 80,
+      "user": "Rahul Sharma",
+      "note": "Drill rewind of ADJ-4001 chain."
+    },
     {
       "id": "LG-0017",
       "timestamp": "2026-08-14 12:22",
@@ -714,7 +781,7 @@
       "delta": -3,
       "from": "WH-Production",
       "to": "WH-Production",
-      "balanceAfter": 177,
+      "balanceAfter": 77,
       "user": "Rahul Sharma",
       "note": "Physical count confirmed twice via mechanical scales. Scrap rods set aside for salvage logging."
     },
@@ -728,7 +795,7 @@
       "delta": -20,
       "from": "WH-Production",
       "to": "Azure Interior",
-      "balanceAfter": 180,
+      "balanceAfter": 80,
       "user": "Rahul Sharma",
       "note": "Dispatch validated, POD captured."
     },
@@ -739,10 +806,10 @@
       "ref": "TR-2001",
       "sku": "STL-ROD-12",
       "name": "Steel Rods 12mm High Tensile",
-      "delta": 100,
+      "delta": 0,
       "from": "WH/Stock/Heavy-Rack-01",
       "to": "WH-Production",
-      "balanceAfter": 200,
+      "balanceAfter": 100,
       "user": "Priya Patel",
       "note": "Relocation — net-zero effect on the global balance."
     },

@@ -249,6 +249,21 @@ try {
   await sleep(300);
   ok('Escape closes the palette', !(await cdp.eval(`!!document.querySelector('[role=dialog]')`)));
 
+  /* ---------------- 4b. canonical dashboard KPIs -------------------- */
+  console.log('\n== 4b. Canonical KPIs ==');
+  await cdp.goto(`${BASE}/#/`);
+  // KPI labels are uppercased by CSS, and innerText reflects text-transform.
+  await cdp.waitFor(`document.body.innerText.toLowerCase().includes('inventory value')`, {
+    label: 'dashboard KPI row',
+  });
+  const dash = await cdp.text('body');
+  ok('valuation reads Rs 9.97 L', /₹9\.97\s*L/.test(dash), dash.match(/₹[\d.,]+\s*L/)?.[0] ?? 'not found');
+  ok('catalogue reports 10 active SKUs', /10 active SKUs/.test(dash));
+  ok('total on hand reads 331', /331 on hand/.test(dash));
+  ok('mixed units are disclosed, not called "units"', /mixed UoM/.test(dash) && !/331 units/.test(dash));
+  ok('no 2024 dates leak into the UI', !/2024-/.test(dash), '2026 dataset');
+  ok('the lifecycle drill reports itself complete', !/Rewind|Start the drill/i.test(dash));
+
   /* ---------------- 5. routes all render ---------------------------- */
   console.log('\n== 5. Route render sweep ==');
   const routes = [

@@ -612,8 +612,13 @@ interface Move {
   at: string;
   from: string;
   to: string;
-  /** signed change applied to `to`; negative removes from `from` */
+  /** physical quantity moved; negative for a dispatch, positive for a receipt */
   qty: number;
+  /**
+   * Signed effect on the *global* balance. Differs from `qty` for a transfer,
+   * which relocates stock and is therefore always 0.
+   */
+  delta: number;
   user: string;
   note: string;
 }
@@ -627,6 +632,7 @@ const OPENING_MOVES: Move[] = PRODUCT_SEED.flatMap((p) =>
     from: 'Opening balance',
     to: loc,
     qty,
+    delta: qty,
     user: 'System',
     note: `Opening book balance carried forward from FY2025-26.`,
   })),
@@ -642,6 +648,7 @@ const DOCUMENT_MOVES: Move[] = [
       from: r.supplier,
       to: line.bin,
       qty: line.received,
+      delta: line.received,
       user: r.createdBy,
       note: 'Goods received note posted.',
     })),
@@ -654,6 +661,8 @@ const DOCUMENT_MOVES: Move[] = [
     from: t.from,
     to: t.to,
     qty: t.qty,
+    // A relocation adds nothing to the enterprise-wide balance.
+    delta: 0,
     user: t.requestedBy,
     note: 'Relocation — net-zero effect on the global balance.',
   })),
@@ -666,6 +675,7 @@ const DOCUMENT_MOVES: Move[] = [
       from: d.from,
       to: d.to,
       qty: -line.qty,
+      delta: -line.qty,
       user: d.createdBy,
       note: 'Dispatch validated, POD captured.',
     })),
@@ -678,6 +688,7 @@ const DOCUMENT_MOVES: Move[] = [
     from: a.location,
     to: a.location,
     qty: a.delta,
+    delta: a.delta,
     user: a.auditor,
     note: a.memo,
   })),
@@ -725,7 +736,7 @@ function derive(moves: Move[]): { ledger: LedgerEntry[]; stock: Record<string, R
         break;
     }
 
-    const balance = (running.get(m.sku) ?? 0) + m.qty;
+    const balance = (running.get(m.sku) ?? 0) + m.delta;
     running.set(m.sku, balance);
 
     ledger.push({
@@ -735,7 +746,7 @@ function derive(moves: Move[]): { ledger: LedgerEntry[]; stock: Record<string, R
       ref: m.ref,
       sku: m.sku,
       name: nameOf(m.sku),
-      delta: m.qty,
+      delta: m.delta,
       from: m.from,
       to: m.to,
       balanceAfter: balance,
