@@ -323,6 +323,7 @@ export interface DashboardSummary {
   readyDeliveries: number;
   doneDeliveries: number;
   overdueDeliveries: number;
+  lateDeliveries: number;
   lateReceipts: number;
   lateTransfers: number;
   /** documents past their scheduled slot, summed across all kinds */
@@ -352,6 +353,7 @@ export interface ScenarioState {
 }
 
 export interface Snapshot {
+  backend?: 'mongodb' | 'file';
   version: number;
   settings: Settings;
   users: User[];

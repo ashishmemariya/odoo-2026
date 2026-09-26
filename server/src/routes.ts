@@ -1,15 +1,17 @@
 import { Router } from 'express';
-import { getDb, commit, resetDb, nowStamp, backendName } from './store.js';
+import { getDb, commit, resetDb, nowStamp, backendName, nextReceiptRef, nextDeliveryRef } from './store.js';
 import {
   HttpError,
   checkDelivery,
   dashboardSummary,
   findProduct,
   freeToUse,
+  approveAdjustment,
   postAdjustment,
   postDelivery,
   postReceipt,
   postTransfer,
+  postLedger,
   productStatus,
   requiresDualSignoff,
   stockAt,
@@ -37,7 +39,7 @@ import {
   requireAuth,
   requirePermission,
 } from './auth.js';
-import type { Product, User } from './types.js';
+import type { Delivery, DeliveryLine, Product, Receipt, StorageLocation, Unit, User, Warehouse } from './types.js';
 
 export const api = Router();
 
@@ -79,6 +81,7 @@ api.get('/snapshot', (req, res) => {
   const { credentials, ...safe } = getDb();
   const now = Date.now();
   res.json({
+    backend: backendName(),
     ...safe,
     products: safe.products.map(productView),
     // documents carry the derived attention flag + step position
@@ -241,6 +244,59 @@ api.get('/categories', (_req, res) => {
   res.json(['All', ...set]);
 });
 
+api.post('/products', requirePermission('product.manage'), (req, res) => {
+  const { name, sku, category, unit, unitCost, reorderPoint, initialLocation, initialQty, icon } = req.body ?? {};
+  const db = getDb();
+  const cleanSku = String(sku ?? '').trim().toUpperCase();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanSku) throw new HttpError(400, 'SKU is required');
+  if (!cleanName) throw new HttpError(400, 'Product name is required');
+  if (findProduct(cleanSku)) throw new HttpError(409, `Product with SKU ${cleanSku} already exists`);
+
+  const cost = Number(unitCost ?? 0);
+  const reorder = Number(reorderPoint ?? 10);
+  const u: Unit = (['kg', 'Units', 'Rolls'] as Unit[]).includes(unit) ? unit : 'Units';
+  const initQty = Number(initialQty ?? 0);
+  const loc = String(initialLocation ?? '').trim();
+
+  const stock: Record<string, number> = {};
+  if (initQty > 0 && loc) {
+    stock[loc] = initQty;
+  }
+
+  const id = `P-${String(db.products.length + 1).padStart(4, '0')}`;
+  const newProduct: Product = {
+    id,
+    name: cleanName,
+    sku: cleanSku,
+    category: String(category ?? 'General').trim() || 'General',
+    unit: u,
+    unitCost: cost >= 0 ? cost : 0,
+    reorderPoint: reorder >= 0 ? reorder : 0,
+    reserved: 0,
+    stock,
+    icon: String(icon ?? 'inventory_2'),
+  };
+
+  db.products.push(newProduct);
+
+  if (initQty > 0 && loc) {
+    postLedger({
+      type: 'OPENING',
+      ref: 'INIT',
+      sku: cleanSku,
+      delta: initQty,
+      from: 'Initial Setup',
+      to: loc,
+      user: currentUser(req).name,
+      note: `Initial opening balance for new product ${cleanName}.`,
+    });
+  }
+
+  commit();
+  res.status(201).json(productView(newProduct));
+});
+
 /* ---------------------------- receipts ---------------------------- */
 
 api.get('/receipts', (req, res) => {
@@ -283,6 +339,46 @@ api.post('/receipt/validate', requirePermission('receipt.post'), (req, res) => {
   const ref = String(req.query.ref ?? req.body?.ref ?? '');
   const { doc, entries } = postReceipt(ref, currentUser(req).name);
   res.json({ ok: true, receipt: doc, ledger: entries });
+});
+
+api.post('/receipts', requirePermission('receipt.create'), (req, res) => {
+  const { supplier, supplierTier, poRef, bolRef, destination, contact, scheduledDate, carrier, dockBay, items, notes } = req.body ?? {};
+  const db = getDb();
+  if (!supplier) throw new HttpError(400, 'Supplier is required');
+  if (!destination) throw new HttpError(400, 'Destination location is required');
+  if (!Array.isArray(items) || items.length === 0) throw new HttpError(400, 'At least one line item is required');
+
+  const ref = nextReceiptRef();
+  const receiptLines: ReceiptLine[] = items.map((it: any) => ({
+    sku: String(it.sku),
+    expected: Number(it.expected ?? it.qty ?? 0),
+    received: Number(it.received ?? it.expected ?? it.qty ?? 0),
+    bin: String(it.bin ?? destination),
+    lot: String(it.lot ?? 'LOT-2026'),
+    barcode: String(it.barcode ?? `${it.sku}-BAR`),
+  }));
+
+  const doc: Receipt = {
+    ref,
+    supplier: String(supplier).trim(),
+    supplierTier: supplierTier ?? 'Tier 1 Vendor',
+    poRef: poRef ? String(poRef).trim() : `PO-${ref.replace(/\D/g, '')}`,
+    bolRef: bolRef ? String(bolRef).trim() : `BOL-${ref.replace(/\D/g, '')}`,
+    destination,
+    contact: contact ? String(contact).trim() : 'Logistics Desk',
+    scheduledDate: scheduledDate ? String(scheduledDate).trim() : nowStamp().slice(0, 10),
+    carrier: carrier ? String(carrier).trim() : 'Standard Freight',
+    dockBay: dockBay ? String(dockBay).trim() : 'Bay-01',
+    status: 'Ready' as const,
+    items: receiptLines,
+    notes: notes ? String(notes).trim() : '',
+    createdAt: nowStamp(),
+    createdBy: currentUser(req).name,
+  };
+
+  db.receipts.unshift(doc);
+  commit();
+  res.status(201).json(receiptView(doc));
 });
 
 /* ---------------------------- deliveries ---------------------------- */
@@ -332,6 +428,49 @@ api.post('/delivery/validate', requirePermission('delivery.post'), (req, res) =>
   const ref = String(req.query.ref ?? req.body?.ref ?? '');
   const { doc, entries } = postDelivery(ref, currentUser(req).name);
   res.json({ ok: true, delivery: doc, ledger: entries });
+});
+
+api.post('/deliveries', requirePermission('delivery.create'), (req, res) => {
+  const { to, contact, address, from, carrier, scheduledDate, items, notes, operationType } = req.body ?? {};
+  const db = getDb();
+  if (!to) throw new HttpError(400, 'Customer / Destination is required');
+  if (!from) throw new HttpError(400, 'Source location is required');
+  if (!Array.isArray(items) || items.length === 0) throw new HttpError(400, 'At least one line item is required');
+
+  const ref = nextDeliveryRef();
+  const deliveryLines: DeliveryLine[] = items.map((it: any) => ({
+    sku: String(it.sku),
+    qty: Number(it.qty ?? 0),
+    bin: String(it.bin ?? from),
+  }));
+
+  // Soft-reserve quantities
+  for (const line of deliveryLines) {
+    const p = findProduct(line.sku);
+    if (p) {
+      p.reserved = (p.reserved ?? 0) + line.qty;
+    }
+  }
+
+  const doc: Delivery = {
+    ref,
+    from,
+    to: String(to).trim(),
+    contact: contact ? String(contact).trim() : 'Dispatch Manager',
+    address: address ? String(address).trim() : 'Client Delivery Address',
+    scheduledDate: scheduledDate ? String(scheduledDate).trim() : nowStamp().slice(0, 10),
+    carrier: carrier ? String(carrier).trim() : 'Express Delivery',
+    status: 'Ready' as const,
+    operationType: operationType ? String(operationType).trim() : 'Standard Delivery',
+    items: deliveryLines,
+    notes: notes ? String(notes).trim() : '',
+    createdAt: nowStamp(),
+    createdBy: currentUser(req).name,
+  };
+
+  db.deliveries.unshift(doc);
+  commit();
+  res.status(201).json(deliveryView(doc));
 });
 
 /* ---------------------------- transfers ---------------------------- */
@@ -414,6 +553,14 @@ api.post('/adjustments', requirePermission('adjustment.create'), (req, res) => {
   db.adjustments.push(doc);
   commit();
   res.json(doc);
+});
+
+api.post('/adjustment/approve', requirePermission('adjustment.approve'), (req, res) => {
+  const doc = approveAdjustment({
+    ref: String(req.query.ref ?? ''),
+    user: currentUser(req).name,
+  });
+  res.json({ ok: true, adjustment: adjustmentView(doc) });
 });
 
 api.post('/adjustment/post', requirePermission('adjustment.approve'), (req, res) => {

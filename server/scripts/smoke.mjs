@@ -264,7 +264,93 @@ ok(
 const tw = await post('/reset');
 ok('a second reset is a no-op', tw.status === 200 && qtyOf((await call('/snapshot')).body.products.find((p) => p.sku === 'STL-ROD-12')) === 77);
 
-console.log('\n== 11. 404s are clean ==');
+
+console.log('== 11. Adjustment approval gate ==');
+const adminToken = (await login('admin@stocksense.app', 'Admin@1234')).body.token;
+const asAdmin = { authorization: `Bearer ${adminToken}` };
+const adjList = (await call('/adjustments', { headers: asAdmin })).body;
+const waiting = adjList.find((a) => a.state === 'Pending Approval');
+ok('the seed has an adjustment awaiting approval', Boolean(waiting), waiting?.ref);
+ok('a waiting count is flagged for attention', waiting?.attention?.kind === 'Awaiting approval');
+ok(
+  'an adjustment carries its position in the flow',
+  waiting?.stepIndex === 1 && waiting?.stepCount === 4,
+  `step ${waiting?.stepIndex + 1}/${waiting?.stepCount}`,
+);
+
+const adjBody = JSON.stringify({ counted: waiting.counted, reason: waiting.reason, memo: '' });
+const premature = await call(`/adjustment/post?ref=${waiting.ref}`, {
+  method: 'POST',
+  headers: asAdmin,
+  body: adjBody,
+});
+ok(
+  'a count cannot reach the ledger before approval',
+  premature.status === 409 && /approved/i.test(premature.body.error ?? ''),
+  premature.body.error,
+);
+ok(
+  'the block explains the next step in business language',
+  !/postAdjustment|approveAdjustment/.test(premature.body.error ?? ''),
+);
+
+const approved = (
+  await call(`/adjustment/approve?ref=${waiting.ref}`, { method: 'POST', headers: asAdmin })
+).body;
+ok('an approver can sign the variance off', approved.adjustment?.state === 'Approved', approved.adjustment?.approvedBy);
+ok(
+  'the approver is recorded and differs from the auditor',
+  Boolean(approved.adjustment?.approvedBy) && approved.adjustment.approvedBy !== waiting.auditor,
+  `${waiting.auditor} -> ${approved.adjustment?.approvedBy}`,
+);
+
+const twice = await call(`/adjustment/approve?ref=${waiting.ref}`, { method: 'POST', headers: asAdmin });
+ok('approving twice is a no-op', twice.status === 200 && twice.body.adjustment.state === 'Approved');
+
+const repost = () => call(`/adjustment/post?ref=${waiting.ref}`, { method: 'POST', headers: asAdmin, body: adjBody });
+ok('a posted adjustment is terminal', (await repost()).status === 200);
+ok('re-posting a posted adjustment is refused', (await repost()).status === 409);
+
+await post('/reset');
+
+console.log('== 12. Document status engine ==');
+const flows = (await call('/status-flows')).body;
+ok(
+  'the canonical lifecycles are published',
+  JSON.stringify(flows.receipt) === JSON.stringify(['Draft', 'Waiting', 'Ready', 'Done']) &&
+    JSON.stringify(flows.delivery) === JSON.stringify(['Draft', 'Waiting', 'Ready', 'Picking', 'Packed', 'Done']) &&
+    JSON.stringify(flows.transfer) === JSON.stringify(['Draft', 'Waiting', 'Ready', 'In Transit', 'Done']) &&
+    JSON.stringify(flows.adjustment) === JSON.stringify(['Draft', 'Pending Approval', 'Approved', 'Posted']),
+);
+ok('Overdue is not a status in any flow', !Object.values(flows).some((f) => f.includes('Overdue')));
+
+const docList = (await call('/receipts')).body;
+ok('every receipt carries its step position', docList.every((r) => typeof r.stepIndex === 'number' && r.stepCount === 4));
+ok('every receipt carries an attention field', docList.every((r) => 'attention' in r));
+ok('a completed receipt is not overdue', docList.filter((r) => r.status === 'Done').every((r) => r.attention === null));
+const late = docList.find((r) => r.attention?.kind === 'Overdue');
+ok('a receipt past its slot is flagged Overdue', Boolean(late), late?.ref);
+ok('the Overdue flag names the lateness', late?.attention.daysLate > 0, `${late?.attention.daysLate} day(s)`);
+ok(
+  'an overdue receipt keeps its own flow step',
+  late?.status === 'Waiting' && late?.stepIndex === 1,
+  `${late?.ref} is ${late?.status}`,
+);
+ok('no stored document uses Overdue as a status', !docList.some((r) => r.status === 'Overdue'));
+ok(
+  'the Overdue lane is filterable',
+  (await call('/receipts?attention=Overdue')).body.every((r) => r.attention?.kind === 'Overdue'),
+);
+ok('filtering by a real status still works', (await call('/receipts?status=Done')).body.every((r) => r.status === 'Done'));
+
+const dash = (await call('/snapshot')).body.dashboard;
+ok('the dashboard counts overdue documents', dash.overdueCount >= 1, `overdueCount=${dash.overdueCount}`);
+ok('the dashboard counts match the documents', dash.overdueCount === dash.lateReceipts + dash.overdueDeliveries + dash.lateTransfers);
+ok('the dashboard no longer counts a stored Overdue status', dash.overdueDeliveries === dash.lateDeliveries);
+
+await post('/reset');
+
+console.log('== 13. 404s are clean ==');
 ok('unknown delivery -> 404', (await call('/delivery?ref=WH/OUT/9999')).status === 404);
 ok('unknown SKU -> 404', (await call('/products/NOPE')).status === 404);
 ok('unknown endpoint -> 404', (await call('/nope')).status === 404);

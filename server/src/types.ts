@@ -9,7 +9,8 @@ export type LocationCode =
   | 'WH/Output'
   | 'WH-Production'
   | 'WH-Cold-Zone'
-  | 'WH/Quarantine';
+  | 'WH/Quarantine'
+  | (string & {});
 
 export type Unit = 'kg' | 'Units' | 'Rolls';
 
@@ -131,6 +132,9 @@ export interface Adjustment {
   reason: AdjustmentReason;
   memo: string;
   auditor: string;
+  /** who signed the variance off; must differ from `auditor` */
+  approvedBy?: string;
+  approvedAt?: string;
   state: AdjustmentState;
   valuationImpact: number;
   createdAt: string;

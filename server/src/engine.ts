@@ -395,6 +395,32 @@ export function postTransfer(ref: string, user: string): { doc: Transfer; entry:
  * Physical count reconciliation
  * ------------------------------------------------------------------ */
 
+/**
+ * Second pair of eyes. An adjustment only becomes postable once a different
+ * person has signed off the variance — the count and the approval are kept
+ * apart on purpose.
+ */
+export function approveAdjustment(input: { ref: string; user: string }): Adjustment {
+  const db = getDb();
+  const doc = db.adjustments.find((a) => a.ref === input.ref);
+  if (!doc) throw new HttpError(404, `Adjustment ${input.ref} not found`);
+  if (doc.state === 'Posted') throw new HttpError(409, `${input.ref} is already posted to the ledger`);
+  if (doc.state === 'Approved') return doc;
+  if (doc.state !== 'Pending Approval') {
+    throw new HttpError(409, `${input.ref} is ${doc.state.toLowerCase()} — only a count awaiting approval can be signed off.`);
+  }
+  if (doc.auditor && doc.auditor === input.user) {
+    throw new HttpError(
+      403,
+      `${input.ref} was counted by ${doc.auditor} — a second person must approve it.`,
+    );
+  }
+  doc.state = 'Approved';
+  doc.approvedBy = input.user;
+  doc.approvedAt = nowStamp();
+  commit();
+  return doc;
+}
 export function postAdjustment(
   input: {
     ref: string;
@@ -408,6 +434,14 @@ export function postAdjustment(
   const doc = db.adjustments.find((a) => a.ref === input.ref);
   if (!doc) throw new HttpError(404, `Adjustment ${input.ref} not found`);
   if (doc.state === 'Posted') throw new HttpError(409, `${input.ref} already posted to ledger`);
+  // Nothing reaches the ledger on a count alone: a second pair of eyes must
+  // sign the variance off first.
+  if (doc.state !== 'Approved') {
+    throw new HttpError(
+      409,
+      `${input.ref} is ${doc.state.toLowerCase()} — get it approved before posting to the ledger.`,
+    );
+  }
 
   const p = findProduct(doc.sku);
   if (!p) throw new HttpError(404, `SKU ${doc.sku} not found`);
@@ -542,6 +576,8 @@ export function dashboardSummary() {
     readyDeliveries: db.deliveries.filter((d) => d.status === 'Ready').length,
     doneDeliveries: db.deliveries.filter((d) => d.status === 'Done').length,
     /** Derived, never a stored status: these are documents past their slot. */
+    lateDeliveries: lateDeliveries.length,
+    /** legacy alias kept for the dashboard KPI copy */
     overdueDeliveries: lateDeliveries.length,
     lateReceipts: lateReceipts.length,
     lateTransfers: lateTransfers.length,

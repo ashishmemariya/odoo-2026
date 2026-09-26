@@ -1,7 +1,7 @@
 # StockSense ERP
 
 Enterprise logistics & inventory system built from the StockSense wireframes.
-React 18 + Vite front end, Express back end, JSON-file persistence.
+React 18 + Vite front end, Express back end, MongoDB persistence.
 
 The point of the build is that **every number on screen comes from the server**.
 The browser never mutates stock; it asks the API to post a document and then
@@ -31,10 +31,12 @@ npm start        # → http://localhost:4000
 | Command | What it does |
 | --- | --- |
 | `npm run smoke` | 76 assertions against a running API (auth, roles, seed integrity, drill, guardrails, FIFO, hierarchy, ledger) |
-| `npm run browser` | 36 assertions driving real Chrome over CDP (sign-in gate, palette, KPIs, every route, sign-out) |
-| `npm run verify` | typecheck → smoke → browser |
+| `npm run browser` | 42 assertions driving real Chrome over CDP (sign-in gate, palette, KPIs, every route, the lifecycle drill, sign-out) |
+| `npm run verify` | typecheck -> smoke -> browser |
 | `npm run typecheck` | `tsc --noEmit` across both workspaces |
-| `npm run reset` | Delete and reseed `server/data/db.json` |
+| `npm run reset` | Wipe the datastore and reseed the canonical 2026 scenario (either backend) |
+| `npm run mongo:check` | Verify `MONGO_URI` is reachable and report what is already stored |
+| `npm run mongo:inspect` | Read-only dump of collection names, counts and identifying fields |
 
 > On Windows the `node_modules/.bin` shims may not be created, so every script
 > invokes its tool through `node <entry-point>` instead of a bare binary name.
@@ -217,7 +219,10 @@ POST   /api/scenario/reset         restore the canonical seed     (demo.reset)
 server/src/
   types.ts      domain model
   seed.ts       the wireframe data, transcribed
-  store.ts      JSON persistence + doc/ledger sequences + version-gated migration
+  store.ts      persistence seam: picks the backend, holds the in-memory dataset
+  status.ts     canonical document lifecycles, transition rules, derived attention
+  db/mongo.ts   MongoDB driver - one collection per array + a `meta` document
+  db/file.ts    JSON-file driver, used when MONGO_URI is unset
   auth.ts       scrypt hashing, sessions, role→permission matrix, Express guards
   engine.ts     all inventory invariants live here
   password.ts   scrypt hashing (leaf module, breaks the seed/auth import cycle)
@@ -249,9 +254,21 @@ was removed, rather than leaving two sources of truth in the repo.
 
 ## Notes / limits
 
-- Persistence is a JSON file (`server/data/db.json`), not a database. Fine for
-  a demo; swap `store.ts` for a real driver without touching `engine.ts`. A
-  `version` bump reseeds rather than booting into a half-migrated file.
+- Persistence is **MongoDB** (Atlas) when `MONGO_URI` is set in `server/.env`,
+  otherwise a JSON file at `server/data/db.json`. `store.ts` is the only seam
+  that knows which; `engine.ts` and the routes are untouched by the swap. If
+  Atlas is unreachable the API logs a warning and falls back to the file
+  rather than refusing to boot.
+- The MongoDB driver hydrates the whole dataset on boot and rewrites the
+  touched collections on `commit()`. Writes are **serialised** - one flush at
+  a time, with bursts coalescing into a single follow-up write - because the
+  driver replaces whole collections and two overlapping flushes would
+  interleave their deletes and inserts.
+- A `signature` of the seeded catalogue is stored in `meta`. The Atlas cluster
+  is shared with an earlier prototype, so a dataset that does not carry our
+  exact SKU list is treated as foreign and reseeded rather than silently
+  adopted.
+- A `version` bump reseeds rather than booting into half-migrated data.
 - Sessions are held **in memory**, so restarting the API signs everyone out.
   Tokens are never written to disk.
 - The dual sign-off threshold is *flagged* but a single user can still approve.
