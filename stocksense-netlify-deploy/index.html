@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StockSense | Minimalist Inventory Management System</title>
+    <meta name="description" content="Next-Generation Professional & Minimalist Retail & Warehouse Inventory Command System" />
+
+    <!-- Google Fonts & Material Symbols -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+
+    <!-- Core Minimalist Stylesheet -->
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Minimalist Navigation Sidebar -->
+      <aside class="app-sidebar" aria-label="Main Navigation">
+        <div class="sidebar-header">
+          <div class="brand-badge">S</div>
+          <div class="brand-text">
+            <span class="brand-title">StockSense</span>
+            <span class="brand-tag">Inventory Ops</span>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav">
+          <button type="button" class="nav-item active" data-view="dashboard" onclick="window.StockSense.navigate('dashboard')">
+            <span class="material-symbols-outlined">dashboard</span>
+            <span>Dashboard</span>
+          </button>
+          
+          <button type="button" class="nav-item" data-view="products" onclick="window.StockSense.navigate('products')">
+            <span class="material-symbols-outlined">inventory_2</span>
+            <span>Products</span>
+            <span class="nav-badge">6</span>
+          </button>
+
+          <div class="nav-section-title">Operations</div>
+
+          <button type="button" class="nav-item" data-view="receipts" onclick="window.StockSense.navigate('receipts')">
+            <span class="material-symbols-outlined">call_received</span>
+            <span>Receipts</span>
+            <span class="nav-badge" style="background-color:var(--brand-primary-light); color:var(--brand-primary-text);">2 Ready</span>
+          </button>
+
+          <button type="button" class="nav-item" data-view="deliveries" onclick="window.StockSense.navigate('deliveries')">
+            <span class="material-symbols-outlined">local_shipping</span>
+            <span>Deliveries</span>
+            <span class="nav-badge" style="background-color:var(--danger-light); color:var(--danger-text);">2 To Deliver</span>
+          </button>
+
+          <button type="button" class="nav-item" data-view="transfers" onclick="window.StockSense.navigate('transfers')">
+            <span class="material-symbols-outlined">multiple_stop</span>
+            <span>Internal Transfers</span>
+          </button>
+
+          <button type="button" class="nav-item" data-view="ledger" onclick="window.StockSense.navigate('ledger')">
+            <span class="material-symbols-outlined">receipt_long</span>
+            <span>Move History</span>
+          </button>
+
+          <div class="nav-section-title">Configuration & Account</div>
+
+          <button type="button" class="nav-item" data-view="warehouses" onclick="window.StockSense.navigate('warehouses')">
+            <span class="material-symbols-outlined">warehouse</span>
+            <span>Warehouses & Locs</span>
+          </button>
+
+          <button type="button" class="nav-item" data-view="login" onclick="window.StockSense.navigate('login')">
+            <span class="material-symbols-outlined">lock_open</span>
+            <span>Login / Switch User</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-profile-chip" title="Active Session: Click to sign out or switch accounts">
+            <div class="avatar" style="display:flex; align-items:center; justify-content:center; background:#0284c7; color:#fff; font-weight:600; font-size:0.875rem;">RS</div>
+            <div class="user-info">
+              <span class="user-name">Rahul Sharma</span>
+              <span class="user-role">Inventory Manager</span>
+            </div>
+            <button type="button" class="btn btn-icon" style="width:28px; height:28px; border:none;" onclick="window.StockSense.signOut()" title="Sign Out / Switch User">
+              <span class="material-symbols-outlined" style="font-size:1.15rem; color:var(--danger);">logout</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Layout -->
+      <div class="app-main-layout">
+        <!-- Minimal Topbar -->
+        <header class="app-topbar">
+          <div class="topbar-left">
+            <button type="button" class="mobile-menu-btn" onclick="window.StockSense.toggleMobileMenu()" aria-label="Toggle menu">
+              <span class="material-symbols-outlined">menu</span>
+            </button>
+
+            <div class="warehouse-pill" onclick="window.StockSense.navigate('warehouses')">
+              <span class="material-symbols-outlined" style="font-size:1.15rem; color:var(--brand-primary)">warehouse</span>
+              <span>All Locations (Unified)</span>
+              <span class="material-symbols-outlined" style="font-size:1rem; color:var(--text-dim)">unfold_more</span>
+            </div>
+
+            <div class="search-container">
+              <span class="material-symbols-outlined search-icon">search</span>
+              <input type="search" class="search-input" placeholder="Search SKU, reference, product... [Ctrl+K]" oninput="window.StockSense.setSearch(this.value)" />
+              <span class="search-shortcut">⌘K</span>
+            </div>
+          </div>
+
+          <div class="topbar-right">
+            <button type="button" class="btn btn-icon" onclick="window.StockSense.toggleTheme()" title="Toggle Dark/Light Mode">
+              <span class="material-symbols-outlined">brightness_4</span>
+            </button>
+            <button type="button" class="btn btn-primary" onclick="window.StockSense.openModal('receipt')">
+              <span class="material-symbols-outlined">add</span>
+              <span>New Operation</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Reactive Viewport Dynamic Container -->
+        <main class="page-content" id="view-container">
+          <!-- Injected via app.js render engine -->
+        </main>
+      </div>
+    </div>
+
+    <!-- Minimalist Modal Container -->
+    <div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target === this) window.StockSense.closeModal()">
+      <div class="modal-dialog" id="modal-dialog-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- Micro Toast Notification System -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Application Controller -->
+    <script src="/js/app.js"></script>
+  </body>
+</html>
