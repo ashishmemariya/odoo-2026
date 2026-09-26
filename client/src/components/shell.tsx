@@ -212,7 +212,17 @@ export function TopNav() {
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-2">
+        <div
+          className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
+          title={snap?.backend === 'mongodb' ? 'Connected to MongoDB Atlas cluster' : 'Connected to datastore'}
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>{snap?.backend === 'mongodb' ? 'MongoDB Atlas' : 'Database Active'}</span>
+        </div>
         <button
           className="btn btn-outline !px-2.5"
           onClick={() => void refresh()}

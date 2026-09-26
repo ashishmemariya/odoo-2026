@@ -45,6 +45,36 @@ export default function CommandPalette({ open, onClose }: Props) {
     ];
 
     const actions: Command[] = [];
+    if (can('product.manage')) {
+      actions.push({
+        id: 'act-product',
+        label: 'New product',
+        hint: 'Add a new item to the catalogue',
+        group: 'Create',
+        icon: 'add_box',
+        run: () => go('/products?new=1'),
+      });
+    }
+    if (can('receipt.create')) {
+      actions.push({
+        id: 'act-receipt',
+        label: 'New receipt',
+        hint: 'Receive goods from a supplier',
+        group: 'Create',
+        icon: 'move_to_inbox',
+        run: () => go('/receipts?new=1'),
+      });
+    }
+    if (can('delivery.create')) {
+      actions.push({
+        id: 'act-delivery',
+        label: 'New delivery',
+        hint: 'Dispatch goods to a customer',
+        group: 'Create',
+        icon: 'local_shipping',
+        run: () => go('/deliveries?new=1'),
+      });
+    }
     if (can('transfer.create')) {
       actions.push({
         id: 'act-transfer',
@@ -63,6 +93,16 @@ export default function CommandPalette({ open, onClose }: Props) {
         group: 'Create',
         icon: 'fact_check',
         run: () => go('/counts?new=1'),
+      });
+    }
+    if (can('settings.manage')) {
+      actions.push({
+        id: 'act-warehouse',
+        label: 'New warehouse',
+        hint: 'Add a storage facility or location',
+        group: 'Create',
+        icon: 'warehouse',
+        run: () => go('/warehouse?new=1'),
       });
     }
     if (can('demo.reset')) {

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../store';
 import { Drawer, Modal } from '../components/overlays';
@@ -16,7 +16,7 @@ import {
   SectionTitle,
   StatusBadge,
 } from '../components/ui';
-import type { Product, Snapshot } from '../types';
+import type { Product, Snapshot, Unit } from '../types';
 
 const STATUS_RING: Record<string, string> = {
   IN_STOCK: 'ring-success/25',
@@ -53,13 +53,23 @@ function bookQtyIn(p: Product, code: string, snap: Snapshot): number {
  * ------------------------------------------------------------------ */
 
 export default function Products() {
-  const { snap, busy } = useApp();
+  const { snap, busy, can } = useApp();
+  const [params, setParams] = useSearchParams();
+  const [newOpen, setNewOpen] = useState(params.get('new') === '1');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('All');
   const [status, setStatus] = useState('All');
   const [view, setView] = useState<'grid' | 'ledger'>('grid');
   const [adjust, setAdjust] = useState<Product | null>(null);
   const [history, setHistory] = useState<Product | null>(null);
+
+  const closeNew = () => {
+    setNewOpen(false);
+    if (params.get('new')) {
+      params.delete('new');
+      setParams(params, { replace: true });
+    }
+  };
 
   const categories = useMemo(
     () => ['All', ...new Set((snap?.products ?? []).map((p) => p.category))],
@@ -96,14 +106,21 @@ export default function Products() {
         title="Products & Stock"
         subtitle="Per-SKU cockpit with warehouse breakdown, soft reservations and reorder thresholds. Adjustments post straight to the immutable ledger."
         actions={
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'grid', label: 'Cockpit', icon: 'grid_view' },
-              { value: 'ledger', label: 'Stock ledger', icon: 'table_rows' },
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'grid', label: 'Cockpit', icon: 'grid_view' },
+                { value: 'ledger', label: 'Stock ledger', icon: 'table_rows' },
+              ]}
+            />
+            {can('product.manage') && (
+              <button className="btn btn-primary" onClick={() => setNewOpen(true)}>
+                <Icon name="add" size={16} /> New product
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -318,7 +335,189 @@ export default function Products() {
       />
 
       <HistoryModal product={history} onClose={() => setHistory(null)} />
+      <NewProductModal open={newOpen} onClose={closeNew} categories={categories} />
     </>
+  );
+}
+
+function NewProductModal({
+  open,
+  onClose,
+  categories,
+}: {
+  open: boolean;
+  onClose: () => void;
+  categories: string[];
+}) {
+  const { snap, run, busy } = useApp();
+  const [sku, setSku] = useState('');
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('Hardware');
+  const [customCategory, setCustomCategory] = useState('');
+  const [unit, setUnit] = useState<Unit>('Units');
+  const [unitCost, setUnitCost] = useState('100');
+  const [reorderPoint, setReorderPoint] = useState('10');
+  const [initialLocation, setInitialLocation] = useState('');
+  const [initialQty, setInitialQty] = useState('0');
+
+  useEffect(() => {
+    if (open && snap?.locations && snap.locations.length > 0 && !initialLocation) {
+      const firstLeaf = snap.locations.find((l) => !l.container) ?? snap.locations[0];
+      if (firstLeaf) setInitialLocation(firstLeaf.code);
+    }
+  }, [open, snap, initialLocation]);
+
+  if (!open) return null;
+
+  const validCats = categories.filter((c) => c !== 'All');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sku.trim() || !name.trim()) return;
+    const finalCat = category === '__custom__' ? customCategory.trim() : category;
+    const res = await run(
+      `Create product ${sku.toUpperCase()}`,
+      () =>
+        api.createProduct({
+          sku: sku.trim().toUpperCase(),
+          name: name.trim(),
+          category: finalCat || 'General',
+          unit,
+          unitCost: Number(unitCost) || 0,
+          reorderPoint: Number(reorderPoint) || 0,
+          initialLocation,
+          initialQty: Number(initialQty) || 0,
+          icon: 'inventory_2',
+        }),
+      { success: `Product ${sku.toUpperCase()} added to catalogue` },
+    );
+    if (res) {
+      onClose();
+      setSku('');
+      setName('');
+      setInitialQty('0');
+    }
+  };
+
+  return (
+    <Modal title="Add New Product to Database" onClose={onClose} width="max-w-lg">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="SKU / Item Code *">
+            <input
+              required
+              value={sku}
+              onChange={(e) => setSku(e.target.value.toUpperCase())}
+              placeholder="e.g. SENSOR-PRO-01"
+              className="field font-mono font-bold"
+            />
+          </Field>
+          <Field label="Unit of Measure">
+            <select
+              value={unit}
+              onChange={(e) => setUnit(e.target.value as Unit)}
+              className="field"
+            >
+              <option value="Units">Units (pcs)</option>
+              <option value="kg">kg (weight)</option>
+              <option value="Rolls">Rolls (length)</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Product Name *">
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Industrial Vibration Sensor Pro"
+            className="field"
+          />
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Category">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="field"
+            >
+              {validCats.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value="__custom__">+ Custom category...</option>
+            </select>
+          </Field>
+          {category === '__custom__' && (
+            <Field label="New Category Name">
+              <input
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                placeholder="Category name"
+                className="field"
+                required
+              />
+            </Field>
+          )}
+          <Field label="Unit Cost (₹)">
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={unitCost}
+              onChange={(e) => setUnitCost(e.target.value)}
+              className="field font-mono"
+            />
+          </Field>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Reorder Threshold">
+            <input
+              type="number"
+              min="0"
+              value={reorderPoint}
+              onChange={(e) => setReorderPoint(e.target.value)}
+              className="field font-mono"
+            />
+          </Field>
+          <Field label="Initial Stock Quantity">
+            <input
+              type="number"
+              min="0"
+              value={initialQty}
+              onChange={(e) => setInitialQty(e.target.value)}
+              className="field font-mono"
+            />
+          </Field>
+        </div>
+
+        {Number(initialQty) > 0 && (
+          <Field label="Initial Stock Location">
+            <select
+              value={initialLocation}
+              onChange={(e) => setInitialLocation(e.target.value)}
+              className="field font-mono"
+            >
+              {(snap?.locations ?? []).map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.code} ({l.name})
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2 border-t border-outline-variant pt-3">
+          <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy || !sku.trim() || !name.trim()}>
+            <Icon name="save" size={16} /> Save to Database
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

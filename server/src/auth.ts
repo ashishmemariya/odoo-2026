@@ -48,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'transfer.post',
     'adjustment.create',
     'adjustment.approve',
+    'adjustment.post',
     'count.create',
     'count.approve',
     'ledger.export',

@@ -39,7 +39,7 @@ import {
   requireAuth,
   requirePermission,
 } from './auth.js';
-import type { Delivery, DeliveryLine, Product, Receipt, StorageLocation, Unit, User, Warehouse } from './types.js';
+import type { Delivery, DeliveryLine, Product, Receipt, ReceiptLine, StorageLocation, Unit, User, Warehouse } from './types.js';
 
 export const api = Router();
 
@@ -563,7 +563,7 @@ api.post('/adjustment/approve', requirePermission('adjustment.approve'), (req, r
   res.json({ ok: true, adjustment: adjustmentView(doc) });
 });
 
-api.post('/adjustment/post', requirePermission('adjustment.approve'), (req, res) => {
+api.post('/adjustment/post', requirePermission('adjustment.post'), (req, res) => {
   const { doc, entry } = postAdjustment({
     ref: String(req.query.ref ?? ''),
     counted: Number(req.body?.counted ?? 0),
@@ -589,7 +589,66 @@ api.get('/ledger', (req, res) => {
 
 api.get('/warehouses', (_req, res) => res.json(getDb().warehouses));
 
+api.post('/warehouses', requirePermission('settings.manage'), (req, res) => {
+  const { code, name, type, address, manager } = req.body ?? {};
+  const db = getDb();
+  const cleanCode = String(code ?? '').trim().toUpperCase();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanCode) throw new HttpError(400, 'Warehouse code is required');
+  if (!cleanName) throw new HttpError(400, 'Warehouse name is required');
+  if (db.warehouses.some((w) => w.code === cleanCode)) {
+    throw new HttpError(409, `Warehouse with code ${cleanCode} already exists`);
+  }
+
+  const newWh: Warehouse = {
+    code: cleanCode,
+    name: cleanName,
+    type: type ?? 'Main Fulfillment',
+    address: address ? String(address).trim() : '',
+    manager: manager ? String(manager).trim() : currentUser(req).name,
+    capacityUsedPct: 0,
+    locationCount: 0,
+  };
+
+  db.warehouses.push(newWh);
+  commit();
+  res.status(201).json(newWh);
+});
+
 api.get('/locations', (_req, res) => res.json(getDb().locations));
+
+api.post('/locations', requirePermission('settings.manage'), (req, res) => {
+  const { code, name, warehouse, parent, container, type, maxLoad } = req.body ?? {};
+  const db = getDb();
+  const cleanCode = String(code ?? '').trim();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanCode) throw new HttpError(400, 'Location code is required');
+  if (!cleanName) throw new HttpError(400, 'Location name is required');
+  if (!warehouse) throw new HttpError(400, 'Warehouse is required');
+  if (db.locations.some((l) => l.code === cleanCode)) {
+    throw new HttpError(409, `Location with code ${cleanCode} already exists`);
+  }
+
+  const newLoc: StorageLocation = {
+    code: cleanCode,
+    name: cleanName,
+    shortCode: cleanCode.split('/').pop() ?? cleanCode,
+    warehouse: String(warehouse),
+    parent: parent ? String(parent) : undefined,
+    container: Boolean(container),
+    type: type ?? 'Internal Storage',
+    skuCount: 0,
+    maxLoad: maxLoad ? String(maxLoad) : '1,000 kg',
+    status: 'Active',
+  };
+
+  db.locations.push(newLoc);
+  const wh = db.warehouses.find((w) => w.code === warehouse);
+  if (wh) wh.locationCount = (wh.locationCount ?? 0) + 1;
+
+  commit();
+  res.status(201).json(newLoc);
+});
 
 /**
  * The canonical lifecycles, so the client renders steppers and filter chips from

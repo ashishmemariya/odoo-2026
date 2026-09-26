@@ -18,7 +18,7 @@ import {
 import type { Adjustment, AdjustmentReason } from '../types';
 
 export default function PhysicalCounts() {
-  const { snap, run, busy, metadata } = useApp();
+  const { snap, run, busy, metadata, can } = useApp();
   const user = useUser();
   const [approving, setApproving] = useState<Adjustment | null>(null);
   const [counted, setCounted] = useState('');
@@ -123,11 +123,33 @@ export default function PhysicalCounts() {
                         </div>
                       </td>
                       <td className="td text-right">
-                        {a.state !== 'Posted' ? (
-                          <button className="btn btn-primary !px-2.5 !py-1" onClick={() => startApproval(a)}>
-                            <Icon name="approval" size={14} /> Approve
+                      {a.state === 'Pending Approval' ? (
+                        can('adjustment.approve') ? (
+                          <button
+                            className="btn btn-primary !px-2.5 !py-1"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(
+                                'Sign off the variance',
+                                () => api.approveAdjustment(a.ref),
+                                { success: `${a.ref} signed off — ready for the ledger` },
+                              )
+                            }
+                          >
+                            <Icon name="approval" size={14} /> Sign off
                           </button>
                         ) : (
+                          <span className="text-[11.5px] text-on-surface/55">Awaiting sign-off</span>
+                        )
+                      ) : a.state === 'Approved' ? (
+                        can('adjustment.post') ? (
+                          <button className="btn btn-teal !px-2.5 !py-1" onClick={() => startApproval(a)}>
+                            <Icon name="publish" size={14} /> Post to ledger
+                          </button>
+                        ) : (
+                          <span className="text-[11.5px] text-on-surface/55">Ready to post</span>
+                        )
+                      ) : (
                           <Link
                             to={`/products/${a.sku}`}
                             className="btn btn-outline !px-2 !py-1"

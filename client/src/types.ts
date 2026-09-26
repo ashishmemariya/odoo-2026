@@ -279,6 +279,7 @@ export type Permission =
   | 'adjustment.view'
   | 'adjustment.create'
   | 'adjustment.approve'
+  | 'adjustment.post'
   | 'count.view'
   | 'count.create'
   | 'count.approve'

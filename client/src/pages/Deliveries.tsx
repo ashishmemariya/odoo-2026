@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useApp, useUser } from '../store';
+import { Modal } from '../components/overlays';
 import {
   Badge,
   Card,
@@ -27,9 +28,19 @@ const COLUMN_META: Record<string, { label: string; icon: string }> = {
 };
 
 export default function Deliveries() {
-  const { snap, metadata } = useApp();
+  const { snap, metadata, can } = useApp();
+  const [params, setParams] = useSearchParams();
+  const [newOpen, setNewOpen] = useState(params.get('new') === '1');
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [status, setStatus] = useState('All');
+
+  const closeNew = () => {
+    setNewOpen(false);
+    if (params.get('new')) {
+      params.delete('new');
+      setParams(params, { replace: true });
+    }
+  };
 
   if (!snap) return null;
   const columns: DocColumn[] = (metadata?.statusFlows.delivery ?? []).map((key) => ({
@@ -47,14 +58,21 @@ export default function Deliveries() {
         title="Deliveries"
         subtitle="Sales orders released to the warehouse. Validation is checked against live stock at the moment of dispatch — shortages are refused, not warned about."
         actions={
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'list', label: 'List', icon: 'view_list' },
-              { value: 'kanban', label: 'Kanban', icon: 'view_kanban' },
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'list', label: 'List', icon: 'view_list' },
+                { value: 'kanban', label: 'Kanban', icon: 'view_kanban' },
+              ]}
+            />
+            {can('delivery.create') && (
+              <button className="btn btn-primary" onClick={() => setNewOpen(true)}>
+                <Icon name="add" size={16} /> New delivery
+              </button>
+            )}
+          </div>
         }
       />
 

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useApp, useUser } from '../store';
+import { Modal } from '../components/overlays';
 import {
   Badge,
   Card,
   Empty,
+  Field,
   Icon,
   PageHeader,
   Ref,
@@ -30,9 +32,19 @@ const TIER_TONE = {
 } as const;
 
 export default function Receipts() {
-  const { snap, metadata } = useApp();
+  const { snap, metadata, can } = useApp();
+  const [params, setParams] = useSearchParams();
+  const [newOpen, setNewOpen] = useState(params.get('new') === '1');
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [status, setStatus] = useState('All');
+
+  const closeNew = () => {
+    setNewOpen(false);
+    if (params.get('new')) {
+      params.delete('new');
+      setParams(params, { replace: true });
+    }
+  };
 
   if (!snap) return null;
   const columns: DocColumn[] = (metadata?.statusFlows.receipt ?? []).map((key) => ({
@@ -49,14 +61,21 @@ export default function Receipts() {
         title="Receipts"
         subtitle="Expected goods arriving against a purchase order. Validating a receipt posts every received line to the ledger and its bin."
         actions={
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'list', label: 'List', icon: 'view_list' },
-              { value: 'kanban', label: 'Kanban', icon: 'view_kanban' },
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'list', label: 'List', icon: 'view_list' },
+                { value: 'kanban', label: 'Kanban', icon: 'view_kanban' },
+              ]}
+            />
+            {can('receipt.create') && (
+              <button className="btn btn-primary" onClick={() => setNewOpen(true)}>
+                <Icon name="add" size={16} /> New receipt
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -194,7 +213,214 @@ export default function Receipts() {
           })}
         </div>
       )}
+      <NewReceiptModal open={newOpen} onClose={closeNew} />
     </>
+  );
+}
+
+function NewReceiptModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { snap, run, busy } = useApp();
+  const [supplier, setSupplier] = useState('');
+  const [supplierTier, setSupplierTier] = useState<'Tier 1 Vendor' | 'Tier 2 Vendor' | 'Unverified'>('Tier 1 Vendor');
+  const [poRef, setPoRef] = useState('');
+  const [destination, setDestination] = useState('');
+  const [carrier, setCarrier] = useState('Standard Freight');
+  const [dockBay, setDockBay] = useState('Dock-01');
+  const [notes, setNotes] = useState('');
+  const [lines, setLines] = useState<{ sku: string; expected: number; bin: string }[]>([]);
+
+  useEffect(() => {
+    if (open && snap?.locations && snap.locations.length > 0) {
+      if (!destination) {
+        const dest = snap.locations.find((l) => l.code === 'WH/Input' || l.code.includes('Dock')) ?? snap.locations[0];
+        setDestination(dest.code);
+      }
+      if (lines.length === 0 && snap.products.length > 0) {
+        setLines([{ sku: snap.products[0].sku, expected: 50, bin: snap.locations[0].code }]);
+      }
+    }
+  }, [open, snap, destination, lines.length]);
+
+  if (!open) return null;
+
+  const addLine = () => {
+    if (snap?.products && snap.products.length > 0) {
+      setLines((prev) => [...prev, { sku: snap.products[0].sku, expected: 10, bin: destination || snap.locations[0].code }]);
+    }
+  };
+
+  const removeLine = (idx: number) => {
+    setLines((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateLine = (idx: number, patch: Partial<{ sku: string; expected: number; bin: string }>) => {
+    setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supplier.trim() || lines.length === 0) return;
+    const res = await run(
+      `Create receipt from ${supplier}`,
+      () =>
+        api.createReceipt({
+          supplier: supplier.trim(),
+          supplierTier,
+          poRef: poRef.trim() || undefined,
+          destination,
+          carrier,
+          dockBay,
+          notes: notes.trim() || undefined,
+          items: lines.map((l) => ({
+            sku: l.sku,
+            expected: Number(l.expected) || 1,
+            bin: l.bin || destination,
+          })),
+        }),
+      { success: 'Goods receipt created in database' },
+    );
+    if (res) {
+      onClose();
+      setSupplier('');
+      setPoRef('');
+      setNotes('');
+    }
+  };
+
+  return (
+    <Modal title="Create Inbound Goods Receipt" onClose={onClose} width="max-w-2xl">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Supplier / Vendor *">
+            <input
+              required
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              placeholder="e.g. Apex Industrial Supplies"
+              className="field"
+            />
+          </Field>
+          <Field label="Supplier Tier">
+            <select
+              value={supplierTier}
+              onChange={(e) => setSupplierTier(e.target.value as any)}
+              className="field"
+            >
+              <option value="Tier 1 Vendor">Tier 1 Vendor</option>
+              <option value="Tier 2 Vendor">Tier 2 Vendor</option>
+              <option value="Unverified">Unverified</option>
+            </select>
+          </Field>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Purchase Order # (PO)">
+            <input
+              value={poRef}
+              onChange={(e) => setPoRef(e.target.value)}
+              placeholder="e.g. PO-8921"
+              className="field font-mono"
+            />
+          </Field>
+          <Field label="Destination Location">
+            <select
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              className="field font-mono"
+            >
+              {(snap?.locations ?? []).map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.code} ({l.name})
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Dock Bay">
+            <input
+              value={dockBay}
+              onChange={(e) => setDockBay(e.target.value)}
+              placeholder="e.g. Inward Dock A"
+              className="field"
+            />
+          </Field>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11.5px] font-bold tracking-wide uppercase text-on-surface/65">
+              Line Items ({lines.length})
+            </span>
+            <button type="button" onClick={addLine} className="btn btn-outline !py-1 !text-xs">
+              <Icon name="add" size={14} /> Add Line
+            </button>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto rounded-card border border-outline-variant p-2 bg-surface-low">
+            {lines.map((line, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <select
+                  value={line.sku}
+                  onChange={(e) => updateLine(idx, { sku: e.target.value })}
+                  className="field flex-1 !py-1 text-xs font-mono"
+                >
+                  {(snap?.products ?? []).map((p) => (
+                    <option key={p.sku} value={p.sku}>
+                      {p.sku} - {p.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  value={line.expected}
+                  onChange={(e) => updateLine(idx, { expected: Number(e.target.value) })}
+                  className="field w-24 !py-1 text-xs font-mono"
+                  placeholder="Expected"
+                />
+                <select
+                  value={line.bin}
+                  onChange={(e) => updateLine(idx, { bin: e.target.value })}
+                  className="field w-40 !py-1 text-xs font-mono"
+                >
+                  {(snap?.locations ?? []).map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.code}
+                    </option>
+                  ))}
+                </select>
+                {lines.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeLine(idx)}
+                    className="text-error hover:opacity-80 p-1"
+                    title="Remove line"
+                  >
+                    <Icon name="delete" size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Field label="Notes / Instructions">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Special receiving or inspection notes..."
+            className="field !h-16 resize-none"
+          />
+        </Field>
+
+        <div className="mt-5 flex justify-end gap-2 border-t border-outline-variant pt-3">
+          <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy || !supplier.trim() || lines.length === 0}>
+            <Icon name="save" size={16} /> Save Receipt to Database
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
