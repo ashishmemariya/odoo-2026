@@ -49,7 +49,7 @@ export type AdjustmentReason =
   | 'Scrap / Wear & Tear'
   | 'Supplier Surplus'
   | 'Other';
-export type AdjustmentState = 'Pending Approval' | 'Reconciled' | 'Posted';
+export type AdjustmentState = 'Draft' | 'Pending Approval' | 'Approved' | 'Posted' | 'Canceled';
 
 export interface Product {
   id: string;
@@ -291,6 +291,9 @@ export interface DashboardSummary {
   doneDeliveries: number;
   overdueDeliveries: number;
   lateReceipts: number;
+  lateTransfers: number;
+  /** documents past their scheduled slot, summed across all kinds */
+  overdueCount: number;
   scheduledTransfers: number;
   pendingAdjustments: number;
   ledgerEntries: number;

@@ -1,5 +1,8 @@
 node_modules/
 dist/
 server/data/
+server/.env
+server/.env.*
+!.env.example
 *.log
 .DS_Store
