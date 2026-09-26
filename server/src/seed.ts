@@ -545,7 +545,9 @@ const SEED_TRANSFERS: Transfer[] = [
     qty: 100,
     requestedBy: 'Priya Patel',
     status: 'Done',
+    scheduledDate: '2026-03-02 11:20',
     createdAt: '2026-03-02 11:20',
+    postedAt: '2026-03-02 12:05',
   },
   {
     ref: 'TR-2002',
@@ -555,6 +557,7 @@ const SEED_TRANSFERS: Transfer[] = [
     qty: 4,
     requestedBy: 'Rahul Sharma',
     status: 'Waiting',
+    scheduledDate: '2026-09-26 15:00',
     createdAt: '2026-09-26 07:30',
   },
   {
@@ -565,6 +568,7 @@ const SEED_TRANSFERS: Transfer[] = [
     qty: 4,
     requestedBy: 'Priya Patel',
     status: 'Draft',
+    scheduledDate: '2026-09-28 10:00',
     createdAt: '2026-09-25 16:20',
   },
 ];
@@ -789,8 +793,11 @@ export function buildSeed(): Database {
       dualSignoffVariancePct: 2.5,
       currency: '₹',
     },
-    users: SEED_USERS,
-    credentials: SEED_CREDENTIALS,
+    // The engine mutates documents in place when it posts them. Handing out the
+    // module-level arrays directly would let those writes reach back into the
+    // seed, so every reset would "restore" already-corrupted data.
+    users: structuredClone(SEED_USERS),
+    credentials: structuredClone(SEED_CREDENTIALS),
     warehouses: [
       {
         code: 'WH-01',
@@ -820,12 +827,12 @@ export function buildSeed(): Database {
         locationCount: 1,
       },
     ],
-    locations: SEED_LOCATIONS,
+    locations: structuredClone(SEED_LOCATIONS),
     products,
-    receipts: SEED_RECEIPTS,
-    deliveries: SEED_DELIVERIES,
-    transfers: SEED_TRANSFERS,
-    adjustments: SEED_ADJUSTMENTS,
+    receipts: structuredClone(SEED_RECEIPTS),
+    deliveries: structuredClone(SEED_DELIVERIES),
+    transfers: structuredClone(SEED_TRANSFERS),
+    adjustments: structuredClone(SEED_ADJUSTMENTS),
     ledger,
   };
 }

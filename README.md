@@ -30,8 +30,8 @@ npm start        # → http://localhost:4000
 
 | Command | What it does |
 | --- | --- |
-| `npm run smoke` | 54 assertions against a running API (auth, roles, guardrails, FIFO, hierarchy, ledger) |
-| `npm run browser` | 30 assertions driving real Chrome over CDP (sign-in gate, palette, every route, sign-out) |
+| `npm run smoke` | 76 assertions against a running API (auth, roles, seed integrity, drill, guardrails, FIFO, hierarchy, ledger) |
+| `npm run browser` | 36 assertions driving real Chrome over CDP (sign-in gate, palette, KPIs, every route, sign-out) |
 | `npm run verify` | typecheck → smoke → browser |
 | `npm run typecheck` | `tsc --noEmit` across both workspaces |
 | `npm run reset` | Delete and reseed `server/data/db.json` |
@@ -72,34 +72,69 @@ technical terms, and it requires the Admin role.
 
 ---
 
-## The 4-step guided walkthrough
+## The seeded system
 
-Open the Dashboard and press **Run step**. Each press performs one real
-mutation on the server — it is not a scripted animation.
+The database is not a hand-typed fixture. `seed.ts` declares a set of **moves**
+(opening balances plus the posted documents) and then *derives* both the ledger
+and every product's on-hand map by replaying them. A quantity can therefore
+never disagree with the history that produced it.
 
-| Step | Mutation | Stock effect |
-| --- | --- | --- |
-| 1 | Receive 100 kg into `WH/IN/0001` | `+100` on `STL-ROD-12` |
-| 2 | Execute `TR-2001` → `WH/Production` | `±0` (relocation) |
-| 3 | Validate dispatch `WH/OUT/0001` | `−20` |
-| 4 | Post count variance `ADJ-4001` | `−3` |
+It ships in the **live** state — a 2026 operational snapshot, not an empty
+system:
 
-`STL-ROD-12` starts at **0**. So before step 1 the dispatch on step 3 is
-genuinely unsatisfiable, and the app says so.
+| | |
+| --- | --- |
+| Catalogue | 10 SKUs |
+| On hand | 331 across mixed units (kg, units, rolls) |
+| Valuation | ₹9,96,950 |
+| Low stock | 4 (`MON-DEL-24`, `ACC-LOG-M18`, `CAB-CAT6-305`, `LBL-THM-406`) |
+| Out of stock | 0 — the dashboard says so rather than showing a fake count |
 
-**Before the walkthrough** — `/#/deliveries/WH/OUT/0001` shows a red *Stock
-deficit* banner, a per-line shortfall of 20 kg, and a disabled validate button.
-After step 1 the same page clears and validates.
-
-**After the walkthrough** — 77 kg remain in `WH/Production`, and the ledger
-reads newest-first:
+`STL-ROD-12` opens at **77 kg**, sitting in `WH-Production`, with its whole story
+already in the ledger:
 
 ```
 ADJUSTMENT  ADJ-4001     Δ  -3   bal=77   by Rahul Sharma
 DELIVERY    WH/OUT/0001  Δ -20   bal=80   by Rahul Sharma
-TRANSFER    TR-2001      Δ   0   bal=100  by Rahul Sharma
-RECEIPT     WH/IN/0001   Δ+100   bal=100  by Rahul Sharma
+TRANSFER    TR-2001      Δ   0   bal=100  by Priya Patel
+RECEIPT     RC-1001      Δ+100   bal=100  by Rahul Sharma
 ```
+
+Note the transfer carries `Δ 0`. A transfer relocates stock, so it must not move
+the enterprise-wide balance — the seed tracks the physical `qty` and the global
+`delta` as separate fields for exactly that reason.
+
+---
+
+## The 4-step lifecycle drill
+
+Because the seed is a *finished* system, there is a separate control to rewind
+it: **Start the lifecycle drill** (`POST /api/scenario/start-drill`).
+
+| Step | Mutation | Stock effect |
+| --- | --- | --- |
+| 1 | Receive 100 kg into `RC-1001` | `+100` on `STL-ROD-12` |
+| 2 | Execute `TR-2001` → `WH-Production` | `±0` (relocation) |
+| 3 | Validate dispatch `WH/OUT/0001` | `−20` |
+| 4 | Post count variance `ADJ-4001` | `−3` |
+
+After the rewind `STL-ROD-12` is genuinely **0**, so the dispatch in step 3 is
+unsatisfiable and the app says so: `/#/deliveries/WH/OUT/0001` shows a red *Stock
+deficit* banner, a 20 kg per-line shortfall, and a disabled validate button.
+After step 1 the same page clears and validates, and the drill lands back on
+**77 kg**.
+
+**The rewind does not delete anything.** The ledger is append-only, so unwinding
+writes five counter-moving `REVERSAL` rows and reopens the documents. The
+original `RECEIPT` row is still there underneath, which is the honest way to
+express "we undid this" and keeps *"the ledger explains every balance"* true
+after a rewind. Re-running the drill is idempotent — it always lands on 77.
+
+`npm run reset` restores the canonical seeded system. Note that the seed arrays
+are `structuredClone`d on the way out: the engine mutates documents in place, so
+handing out the module-level arrays by reference would let a drill write through
+into the seed and every later reset would "restore" corrupted data. The smoke
+suite asserts this specifically.
 
 ---
 
@@ -111,25 +146,30 @@ RECEIPT     WH/IN/0001   Δ+100   bal=100  by Rahul Sharma
 | Net-zero transfers | `postTransfer()` asserts the global balance is identical before/after, refuses to commit if it drifted |
 | FIFO draining | `drainFifo()` walks the source subtree in bin order, then other leaves deepest-first, never below zero |
 | Hierarchical balances | `stockAt()` sums a location *and every descendant* |
-| Append-only ledger | `postLedger()` only unshifts — there is no update or delete route anywhere |
+| Append-only ledger | `postLedger()` only unshifts; even a rewind writes a `REVERSAL` row. There is no update or delete route anywhere |
+| Ledger-derived stock | `seed.ts` replays every move to produce both the ledger and the on-hand map, so they cannot drift |
 | Attribution | Every row records the acting **session** user and a verbatim note |
 | Dual sign-off | `requiresDualSignoff()` fires on absolute impact **or** variance % |
 | Role enforcement | `requirePermission()` guards every mutating route; 403 on a capability the role lacks |
 
 ### The location hierarchy
 
-This was the one genuinely non-obvious modelling decision. `WH/Stock1` is a
-*container* over `WH/Stock1/Heavy-Rack-01` and `WH/Stock1/Bay04`, but stock is
-stored on the leaves. So the receipt posts 100 kg into a bin, and the transfer
-that names `WH/Stock1` has to find it by roll-up. An earlier version read the
-container's own key, found zero, and rejected a transfer that was fully
-covered — which is what drove the hierarchy in.
+This was the one genuinely non-obvious modelling decision. `WH/Stock` is a
+*container* over `WH/Stock/Heavy-Rack-01` and `WH/Stock/Bay-04`, but stock is
+stored on the leaves. So the receipt posts 100 kg into a bin, and a transfer that
+names `WH/Stock` has to find it by roll-up. An earlier version read the
+container's own key, found zero, and rejected a transfer that was fully covered —
+which is what drove the hierarchy in.
 
 ```
-WH/Stock1                     (container)
-├── WH/Stock1/Heavy-Rack-01  (leaf)   ← receipt lands here
-└── WH/Stock1/Bay04           (leaf)
+WH/Stock                      (container)
+├── WH/Stock/Heavy-Rack-01   (leaf)   ← receipt RC-1001 lands here
+└── WH/Stock/Bay-04           (leaf)
 ```
+
+A product's `stock` map only ever lists bins that actually hold something —
+emptied bins are dropped rather than left behind as `0` — so the map reads as
+"where is it" instead of "everywhere it has ever been".
 
 ---
 
@@ -163,7 +203,10 @@ POST   /api/adjustment/post?ref= approve + write the ledger row (adjustment.appr
 GET    /api/ledger?type&sku
 GET    /api/warehouses · /api/locations
 GET    /api/settings            PATCH /api/settings (settings.manage)
-GET    /api/scenario            POST /api/scenario/run
+GET    /api/scenario
+POST   /api/scenario/run           next outstanding drill step  (transfer.post)
+POST   /api/scenario/start-drill   rewind to an empty rack        (demo.reset)
+POST   /api/scenario/reset         restore the canonical seed     (demo.reset)
 ```
 
 ---
@@ -177,7 +220,8 @@ server/src/
   store.ts      JSON persistence + doc/ledger sequences + version-gated migration
   auth.ts       scrypt hashing, sessions, role→permission matrix, Express guards
   engine.ts     all inventory invariants live here
-  scenario.ts   the 4-step walkthrough
+  password.ts   scrypt hashing (leaf module, breaks the seed/auth import cycle)
+  scenario.ts   the 4-step lifecycle drill + rewind
   routes.ts     REST surface
   index.ts      express app
 

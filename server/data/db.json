@@ -53,23 +53,23 @@
   "credentials": [
     {
       "userId": "U-1001",
-      "salt": "a70005c77a688fd0e05ed985f9c19f47",
-      "hash": "7c2183a50f0fa90e5f6cf5574df4aa25654fc000a43749e2670ec5786ad51aafc0cb1f31c9dc2dc111b2d617a54e87bdaec56fcc9c59a164633d0c45cca60633"
+      "salt": "079223fa0cb204b6b3d5a91eca4c3bc5",
+      "hash": "629ce5ffa61b6e4b4e2256e457bc0696ac197950e50f0affe9658f7d4050d182bd023aeca7040cbd4de49925afd16f1f62095af3fa859b112255fcec33f3ab01"
     },
     {
       "userId": "U-1002",
-      "salt": "09d3b83569772dfea09d5c14488e1df4",
-      "hash": "c999e1bbfe5662cd0c5a6cad52bf3d975875566ee6fcaa81f312b707db702849606ddaa45340519bd42f30aab68fe5f667a7fdf41597c048ba9dd0bafd91b717"
+      "salt": "075450d50d8ba3deb0a46f297b20e571",
+      "hash": "3a950090d2864689ea6afe5307d0282a287b0caa4ea710a0843cfa2285168c2a58f269ccf2bc81f968914bf7a8ba7dcea96a828ae1ffe23bb82d083f896babd4"
     },
     {
       "userId": "U-1003",
-      "salt": "d15c05cbafe75da5deca13df26b89896",
-      "hash": "105a3f64c64be743f7aaa03d4e904c72c6190d6a1f8cffec5a47a2a767d385bd39f8d0df95116d2b369f0e72d1ece1405fe772035d19444ab5e970b6dc5039a7"
+      "salt": "d91d4f76aa8c7df5d9bfd5e315e07370",
+      "hash": "540acafb1712730fc17459852dc0534037d174731ca89c558c0e3e8d3473ee96dbea99025037c24eda551245348558e193a0487737f03f3df404b5119e93e036"
     },
     {
       "userId": "U-1004",
-      "salt": "4634b12f0d78f1997571dbb36e2f7bd7",
-      "hash": "cc4db86b084d0e88e3836b7b3b751c944cfad9cce1461f60215ad2c8cae50c4ba9f6a1647e831a7b57cb98ea3f51f3d66132f4acc4ff699f04686c27090ad693"
+      "salt": "5529a6c2b26f758096383ae18264a4c5",
+      "hash": "e5344aa77415f6054d18f036b42d02e5870799210e5bae63c62005a25058f3848cddd6c79b798c32af76495bb4ebd5e19e1680000a47a5206d363e5864a78ca7"
     }
   ],
   "warehouses": [
@@ -214,7 +214,9 @@
       "unitCost": 1210,
       "reorderPoint": 30,
       "reserved": 0,
-      "stock": {},
+      "stock": {
+        "WH-Production": 77
+      },
       "icon": "carpenter"
     },
     {
@@ -356,7 +358,7 @@
       "scheduledDate": "2026-03-02 10:30",
       "carrier": "SwiftTrans Logistics #44",
       "dockBay": "BAY-02 North",
-      "status": "Ready",
+      "status": "Done",
       "items": [
         {
           "sku": "STL-ROD-12",
@@ -369,7 +371,8 @@
       ],
       "notes": "Pallets intact (2/2). Zero transit damage. Security seal matched.",
       "createdAt": "2026-03-02 08:15",
-      "createdBy": "Rahul Sharma"
+      "createdBy": "Rahul Sharma",
+      "postedAt": "2026-03-02 10:44"
     },
     {
       "ref": "RC-1002",
@@ -460,7 +463,7 @@
       "address": "452 Industrial Parkway, Sector 9",
       "scheduledDate": "2026-03-04 14:00",
       "carrier": "BlueDart Express",
-      "status": "Waiting",
+      "status": "Done",
       "operationType": "WH: Delivery Orders (Sales Orders)",
       "items": [
         {
@@ -471,7 +474,8 @@
       ],
       "notes": "Dispatch validated against released work order. POD captured.",
       "createdAt": "2026-03-04 07:40",
-      "createdBy": "Rahul Sharma"
+      "createdBy": "Rahul Sharma",
+      "postedAt": "2026-03-04 15:12"
     },
     {
       "ref": "WH/OUT/0002",
@@ -590,7 +594,7 @@
       "sku": "STL-ROD-12",
       "qty": 100,
       "requestedBy": "Priya Patel",
-      "status": "Waiting",
+      "status": "Done",
       "createdAt": "2026-03-02 11:20"
     },
     {
@@ -619,15 +623,16 @@
       "ref": "ADJ-4001",
       "sku": "STL-ROD-12",
       "location": "WH-Production",
-      "recorded": 97,
-      "counted": 97,
-      "delta": 0,
+      "recorded": 80,
+      "counted": 77,
+      "delta": -3,
       "reason": "Scrap / Wear & Tear",
       "memo": "Physical count confirmed twice via mechanical scales. Scrap rods set aside for salvage logging.",
       "auditor": "Rahul Sharma",
-      "state": "Reconciled",
+      "state": "Posted",
       "valuationImpact": -3630,
-      "createdAt": "2026-03-04 16:40"
+      "createdAt": "2026-03-04 16:40",
+      "postedAt": "2026-03-05 09:10"
     },
     {
       "ref": "ADJ-4002",
@@ -645,76 +650,6 @@
     }
   ],
   "ledger": [
-    {
-      "id": "LG-0022",
-      "timestamp": "2026-09-26 14:16:56",
-      "type": "REVERSAL",
-      "ref": "RC-1001",
-      "sku": "STL-ROD-12",
-      "name": "Steel Rods 12mm High Tensile",
-      "delta": -100,
-      "from": "WH/Stock/Heavy-Rack-01",
-      "to": "Reversal",
-      "balanceAfter": 0,
-      "user": "Rahul Sharma",
-      "note": "Drill rewind of ADJ-4001 chain."
-    },
-    {
-      "id": "LG-0021",
-      "timestamp": "2026-09-26 14:16:56",
-      "type": "REVERSAL",
-      "ref": "TR-2001",
-      "sku": "STL-ROD-12",
-      "name": "Steel Rods 12mm High Tensile",
-      "delta": 100,
-      "from": "Reversal",
-      "to": "WH/Stock/Heavy-Rack-01",
-      "balanceAfter": 100,
-      "user": "Rahul Sharma",
-      "note": "Drill rewind of ADJ-4001 chain."
-    },
-    {
-      "id": "LG-0020",
-      "timestamp": "2026-09-26 14:16:56",
-      "type": "REVERSAL",
-      "ref": "TR-2001",
-      "sku": "STL-ROD-12",
-      "name": "Steel Rods 12mm High Tensile",
-      "delta": -100,
-      "from": "WH-Production",
-      "to": "Reversal",
-      "balanceAfter": 0,
-      "user": "Rahul Sharma",
-      "note": "Drill rewind of ADJ-4001 chain."
-    },
-    {
-      "id": "LG-0019",
-      "timestamp": "2026-09-26 14:16:56",
-      "type": "REVERSAL",
-      "ref": "WH/OUT/0001",
-      "sku": "STL-ROD-12",
-      "name": "Steel Rods 12mm High Tensile",
-      "delta": 20,
-      "from": "Reversal",
-      "to": "WH-Production",
-      "balanceAfter": 100,
-      "user": "Rahul Sharma",
-      "note": "Drill rewind of ADJ-4001 chain."
-    },
-    {
-      "id": "LG-0018",
-      "timestamp": "2026-09-26 14:16:56",
-      "type": "REVERSAL",
-      "ref": "ADJ-4001",
-      "sku": "STL-ROD-12",
-      "name": "Steel Rods 12mm High Tensile",
-      "delta": 3,
-      "from": "Reversal",
-      "to": "WH-Production",
-      "balanceAfter": 80,
-      "user": "Rahul Sharma",
-      "note": "Drill rewind of ADJ-4001 chain."
-    },
     {
       "id": "LG-0017",
       "timestamp": "2026-08-14 12:22",

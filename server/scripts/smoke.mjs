@@ -242,12 +242,27 @@ ok('balance clamped at 0, never negative', clamped.total === 0, `total=${clamped
 
 console.log('\n== 10. Reset restores the canonical system ==');
 await call('/settings', { method: 'PATCH', body: JSON.stringify({ preventNegativeStock: true }) });
+// Reset twice in a row: the second one proves the seed itself was not mutated by
+// the drill, which is what happens if the seed arrays are shared by reference.
+await post('/reset');
+await post('/scenario/start-drill');
+for (let i = 0; i < 4; i++) await post('/scenario/run');
 await post('/reset');
 const restored = (await call('/snapshot')).body;
 ok('reset brings back all 10 SKUs', restored.products.length === 10);
 ok('reset restores the 77 kg steel balance', qtyOf(restored.products.find((p) => p.sku === 'STL-ROD-12')) === 77);
 ok('reset restores the Rs 9,96,950 valuation', restored.products.reduce((a, p) => a + qtyOf(p) * p.unitCost, 0) === 996950);
 ok('reset is idempotent (no reversal rows linger)', !restored.ledger.some((l) => l.type === 'REVERSAL'));
+ok(
+  'the seed was not mutated by the drill',
+  restored.adjustments.find((a) => a.ref === 'ADJ-4001')?.state === 'Posted' &&
+    restored.receipts.find((r) => r.ref === 'RC-1001')?.status === 'Done' &&
+    restored.transfers.find((t) => t.ref === 'TR-2001')?.status === 'Done' &&
+    restored.deliveries.find((d) => d.ref === 'WH/OUT/0001')?.status === 'Done',
+  'documents returned to their seeded statuses',
+);
+const tw = await post('/reset');
+ok('a second reset is a no-op', tw.status === 200 && qtyOf((await call('/snapshot')).body.products.find((p) => p.sku === 'STL-ROD-12')) === 77);
 
 console.log('\n== 11. 404s are clean ==');
 ok('unknown delivery -> 404', (await call('/delivery?ref=WH/OUT/9999')).status === 404);

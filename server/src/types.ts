@@ -31,7 +31,20 @@ export interface Product {
   icon: string;
 }
 
-export type DocStatus = 'Draft' | 'Waiting' | 'Ready' | 'Packed' | 'Done' | 'Overdue' | 'Canceled';
+/**
+ * The union of every document status. `Overdue` is intentionally absent — a late
+ * document stays in its own step and raises a derived attention flag instead.
+ * See `status.ts` for the per-kind flows and the transition rules.
+ */
+export type DocStatus =
+  | 'Draft'
+  | 'Waiting'
+  | 'Ready'
+  | 'Picking'
+  | 'Packed'
+  | 'In Transit'
+  | 'Done'
+  | 'Canceled';
 
 export interface ReceiptLine {
   sku: string;
@@ -92,7 +105,10 @@ export interface Transfer {
   qty: number;
   requestedBy: string;
   status: DocStatus;
+  /** planned move window; a transfer that slips raises a derived Overdue flag */
+  scheduledDate: string;
   createdAt: string;
+  postedAt?: string;
 }
 
 export type AdjustmentReason =
@@ -103,7 +119,7 @@ export type AdjustmentReason =
   | 'Supplier Surplus'
   | 'Other';
 
-export type AdjustmentState = 'Pending Approval' | 'Reconciled' | 'Posted';
+export type AdjustmentState = 'Draft' | 'Pending Approval' | 'Approved' | 'Posted' | 'Canceled';
 
 export interface Adjustment {
   ref: string;

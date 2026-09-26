@@ -262,7 +262,42 @@ try {
   ok('total on hand reads 331', /331 on hand/.test(dash));
   ok('mixed units are disclosed, not called "units"', /mixed UoM/.test(dash) && !/331 units/.test(dash));
   ok('no 2024 dates leak into the UI', !/2024-/.test(dash), '2026 dataset');
-  ok('the lifecycle drill reports itself complete', !/Rewind|Start the drill/i.test(dash));
+  ok('the lifecycle drill reports itself complete', /Drill complete/.test(dash));
+
+  /* ---------------- 4c. the lifecycle drill in the real UI ----------- */
+  console.log('\n== 4c. Lifecycle drill ==');
+  await cdp.goto(`${BASE}/#/`);
+  await cdp.waitFor(`document.body.innerText.toLowerCase().includes('lifecycle drill')`, {
+    label: 'lifecycle drill bar',
+  });
+  ok(
+    'the seeded system reports the drill as already complete',
+    /Drill complete/.test(await cdp.text('body')),
+  );
+  ok('a rewind control is offered', /Start the drill/.test(await cdp.text('body')));
+
+  // Rewind to an empty rack, then run all four steps through the real buttons.
+  await cdp.clickByText('button', 'Start the drill');
+  await cdp
+    .waitFor(`document.body.innerText.includes('Run step 1')`, { label: 'drill rewound' })
+    .catch(() => {});
+  const rewound = await cdp.text('body');
+  ok('rewind empties the rack and offers step 1', /Run step 1/.test(rewound), '');
+  ok('rewind is reflected as a zero balance', /total\s+0\s*kg/.test(rewound), '');
+
+  for (let i = 1; i <= 4; i++) {
+    await cdp.clickByText('button', `Run step ${i}`);
+    await sleep(700);
+  }
+  const finished = await cdp.text('body');
+  ok('the drill lands back on 77 kg', /total\s+77\s*kg/.test(finished), '');
+  ok('the drill reports itself complete again', /Drill complete/.test(finished), '');
+
+  // Put the demo back into its canonical state for anything that runs after.
+  await cdp.clickByText('button', 'Restore seed');
+  await cdp
+    .waitFor(`document.body.innerText.includes('Drill complete')`, { label: 'seed restored' })
+    .catch(() => {});
 
   /* ---------------- 5. routes all render ---------------------------- */
   console.log('\n== 5. Route render sweep ==');

@@ -140,7 +140,7 @@ export function startDrill(user: string) {
       reverses: DRILL.adjustment,
       note,
     });
-    adjustment.state = 'Reconciled';
+    adjustment.state = 'Approved';
     adjustment.postedAt = undefined;
     adjustment.counted = DRILL.targetBalance + DRILL.deliverQty;
     adjustment.recorded = DRILL.targetBalance + DRILL.deliverQty;

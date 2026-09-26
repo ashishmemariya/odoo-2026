@@ -1,4 +1,5 @@
 import { getDb, commit, nextLedgerId, nowStamp } from './store.js';
+import { documentAttention } from './status.js';
 import type {
   Adjustment,
   Delivery,
@@ -523,6 +524,11 @@ export function dashboardSummary() {
   const valuation = db.products.reduce((a, p) => a + totalStock(p) * p.unitCost, 0);
   const lowStock = db.products.filter((p) => productStatus(p) !== 'IN_STOCK');
 
+  const now = Date.now();
+  const lateReceipts = db.receipts.filter((r) => documentAttention(r, now)?.kind === 'Overdue');
+  const lateDeliveries = db.deliveries.filter((d) => documentAttention(d, now)?.kind === 'Overdue');
+  const lateTransfers = db.transfers.filter((t) => documentAttention(t, now)?.kind === 'Overdue');
+
   return {
     catalogSkus: db.products.length,
     totalOnHand: onHand,
@@ -535,8 +541,11 @@ export function dashboardSummary() {
     waitingDeliveries: db.deliveries.filter((d) => d.status === 'Waiting').length,
     readyDeliveries: db.deliveries.filter((d) => d.status === 'Ready').length,
     doneDeliveries: db.deliveries.filter((d) => d.status === 'Done').length,
-    overdueDeliveries: db.deliveries.filter((d) => d.status === 'Overdue').length,
-    lateReceipts: db.receipts.filter((r) => r.status === 'Overdue').length,
+    /** Derived, never a stored status: these are documents past their slot. */
+    overdueDeliveries: lateDeliveries.length,
+    lateReceipts: lateReceipts.length,
+    lateTransfers: lateTransfers.length,
+    overdueCount: lateReceipts.length + lateDeliveries.length + lateTransfers.length,
     scheduledTransfers: db.transfers.filter((t) => t.status !== 'Done').length,
     pendingAdjustments: db.adjustments.filter((a) => a.state === 'Pending Approval').length,
     ledgerEntries: db.ledger.length,
