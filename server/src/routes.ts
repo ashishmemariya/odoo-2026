@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDb, commit, resetDb, nowStamp } from './store.js';
+import { getDb, commit, resetDb, nowStamp, backendName } from './store.js';
 import {
   HttpError,
   checkDelivery,
