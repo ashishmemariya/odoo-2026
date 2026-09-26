@@ -385,9 +385,10 @@ export const axiosClient = axios.create({
   adapter: clientMockAdapter,
 });
 
-axiosClient.interceptors.request.use((config) => {
+axiosClient.interceptors.request.use((config: any) => {
   const token = useAuthStore.getState().token;
   if (token) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
