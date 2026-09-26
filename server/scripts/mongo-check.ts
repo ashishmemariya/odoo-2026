@@ -5,11 +5,11 @@
 import dotenv from 'dotenv';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { closeMongo, connectMongo, mongoConfigured, readMongo } from '../src/db/mongo.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: resolve(here, '../../.env') });
+dotenv.config({ path: resolve(here, '../.env') });
 
-const { closeMongo, connectMongo, mongoConfigured, readMongo } from await import('../src/db/mongo.js');
 
 if (!mongoConfigured()) {
   console.error('MONGO_URI is not set in server/.env — nothing to check.');
