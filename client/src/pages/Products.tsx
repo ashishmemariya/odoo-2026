@@ -53,7 +53,7 @@ function bookQtyIn(p: Product, code: string, snap: Snapshot): number {
  * ------------------------------------------------------------------ */
 
 export default function Products() {
-  const { snap, user, run, busy } = useApp();
+  const { snap, busy } = useApp();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('All');
   const [status, setStatus] = useState('All');
@@ -343,7 +343,7 @@ function QuickAdjustDrawer({
 
   const locations = snap?.locations.filter((l) => !l.container) ?? [];
   const p = product;
-  const bookQty = p ? bookQtyIn(p, loc, snap) : 0;
+  const bookQty = p && snap ? bookQtyIn(p, loc, snap) : 0;
 
   const delta = counted === '' ? 0 : Number(counted) - bookQty;
   const impact = delta * (p?.unitCost ?? 0);
@@ -351,17 +351,33 @@ function QuickAdjustDrawer({
 
   const submit = async () => {
     if (!p || !loc || counted === '') return;
-    const created = await api.createCount({
-      sku: p.sku,
-      location: loc,
-      recorded: bookQty,
-      counted: Number(counted),
-      reason,
-      memo,
-      auditor: 'System',
-    });
-    if (!created) return null;
-    return onPost(created.ref, Number(counted), reason as never, memo);
+    const res = await run(
+      `Count for ${p.sku}`,
+      async () => {
+        const created = await api.createCount({
+          sku: p.sku,
+          location: loc,
+          recorded: bookQty,
+          counted: Number(counted),
+          reason,
+          memo,
+          auditor: user.name,
+        });
+        return api.postAdjustment({
+          ref: created.ref,
+          counted: Number(counted),
+          reason: reason as never,
+          memo,
+          user: user.name,
+        });
+      },
+      { success: `Count posted for ${p.sku}` },
+    );
+    if (res) {
+      setCounted('');
+      setMemo('');
+      onClose();
+    }
   };
 
   return (

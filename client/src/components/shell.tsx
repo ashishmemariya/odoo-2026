@@ -3,7 +3,14 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useApp } from '../store';
 import { Icon } from './ui';
 
-const NAV = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  end?: boolean;
+}
+
+const NAV: { section: string; items: NavItem[] }[] = [
   { section: 'Overview', items: [{ to: '/', label: 'Dashboard', icon: 'space_dashboard', end: true }] },
   {
     section: 'Inventory',
@@ -28,7 +35,7 @@ const NAV = [
       { to: '/settings', label: 'Settings', icon: 'tune' },
     ],
   },
-] as const;
+];
 
 const MOBILE_NAV = NAV.flatMap((g) => g.items);
 
@@ -64,7 +71,7 @@ export function SideNav() {
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
-                      end={'end' in item ? item.end : false}
+                      end={item.end ?? false}
                       className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold transition ${
                         on
                           ? 'bg-primary-container/12 text-primary'

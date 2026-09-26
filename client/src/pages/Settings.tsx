@@ -352,11 +352,15 @@ function Toggle({
         <span className="h-4 w-4 rounded-full bg-white shadow-sm" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 text-[12.5px] font-bold">
-          {title}
-          <StatusBadge value={on ? 'Active' : 'Active'} dot={false} className="" />
-        </span>
+        <span className="text-[12.5px] font-bold">{title}</span>
         <span className="mt-1 block text-[11.5px] leading-relaxed text-on-surface/60">{detail}</span>
+        <span
+          className={`mt-1.5 inline-block text-[10.5px] font-bold tracking-wide uppercase ${
+            on ? 'text-success' : 'text-outline'
+          }`}
+        >
+          {on ? 'Enforced' : 'Relaxed'}
+        </span>
       </span>
     </button>
   );
