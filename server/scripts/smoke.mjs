@@ -18,7 +18,8 @@ let token = null;
 
 async function call(path, init = {}) {
   const headers = { 'content-type': 'application/json', ...(init.headers ?? {}) };
-  if (token) headers.authorization = `Bearer ${token}`;
+  // Only fall back to the ambient token when the caller did not supply one.
+  if (token && !headers.authorization) headers.authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
   const body = await res.json().catch(() => ({}));
   return { status: res.status, body };

@@ -8,8 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, ApiError } from './api';
-import type { Snapshot, User } from './types';
+import { api, ApiError, readToken, writeToken } from './api';
+import type { Permission, SessionInfo, Snapshot, User } from './types';
 
 export interface Toast {
   id: number;
@@ -21,11 +21,16 @@ export interface Toast {
 
 interface AppState {
   snap: Snapshot | null;
-  user: User;
+  user: User | null;
+  permissions: Permission[];
   loading: boolean;
+  /** true while we are restoring an existing session on first paint */
+  restoring: boolean;
   busy: boolean;
   toasts: Toast[];
-  setUser: (u: User) => void;
+  can: (p: Permission) => boolean;
+  signIn: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   run: <T>(label: string, fn: () => Promise<T>, opts?: { success?: string }) => Promise<T | null>;
   notify: (t: Omit<Toast, 'id'>) => void;
@@ -34,25 +39,43 @@ interface AppState {
 
 const Ctx = createContext<AppState | null>(null);
 
-const FALLBACK_USER: User = {
-  name: 'Rahul Sharma',
-  role: 'Inventory Manager',
-  initials: 'RS',
-  auditorId: '8821',
-};
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [user, setUser] = useState<User>(FALLBACK_USER);
+  const [user, setUser] = useState<User | null>(null);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState(true);
   const [busy, setBusy] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
 
+  const dismiss = useCallback((id: number) => {
+    setToasts((t) => t.filter((x) => x.id !== id));
+  }, []);
+
+  const notify = useCallback((t: Omit<Toast, 'id'>) => {
+    const id = ++seq.current;
+    setToasts((prev) => [...prev, { ...t, id }]);
+    if (t.kind !== 'error') {
+      setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), 4500);
+    }
+  }, []);
+
+  /** Pull the canonical snapshot. A 401 means the stored token is no longer valid. */
   const refresh = useCallback(async () => {
     try {
-      setSnap(await api.snapshot());
+      const next = await api.snapshot();
+      setSnap(next);
+      setUser(next.me?.user ?? null);
+      setPermissions(next.me?.permissions ?? []);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        writeToken(null);
+        setSnap(null);
+        setUser(null);
+        setPermissions([]);
+        return;
+      }
       setToasts((t) => [
         ...t,
         {
@@ -68,20 +91,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    if (!readToken()) {
+      setRestoring(false);
+      setLoading(false);
+      return;
+    }
+    void api
+      .session()
+      .then((info: SessionInfo) => {
+        setUser(info.user);
+        setPermissions(info.permissions);
+      })
+      .catch(() => writeToken(null))
+      .finally(() => {
+        setRestoring(false);
+        void refresh();
+      });
   }, [refresh]);
 
-  const dismiss = useCallback((id: number) => {
-    setToasts((t) => t.filter((x) => x.id !== id));
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      try {
+        const res = await api.login(email, password);
+        writeToken(res.token);
+        setUser(res.user);
+        setPermissions(res.permissions);
+        setLoading(true);
+        await refresh();
+        return { ok: true };
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Unable to sign in. Please try again.',
+        };
+      }
+    },
+    [refresh],
+  );
+
+  const signOut = useCallback(async () => {
+    try {
+      await api.logout();
+    } catch {
+      /* the local session is cleared regardless */
+    }
+    writeToken(null);
+    setUser(null);
+    setPermissions([]);
+    setSnap(null);
   }, []);
 
-  const notify = useCallback((t: Omit<Toast, 'id'>) => {
-    const id = ++seq.current;
-    setToasts((prev) => [...prev, { ...t, id }]);
-    if (t.kind !== 'error') {
-      setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), 4500);
-    }
-  }, []);
+  const can = useCallback(
+    (p: Permission) => permissions.includes(p),
+    [permissions],
+  );
 
   /**
    * Every mutation goes through here so the server stays the single source of
@@ -98,6 +161,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return out;
       } catch (err) {
         const apiErr = err instanceof ApiError ? err : null;
+        if (apiErr?.status === 401) {
+          writeToken(null);
+          setUser(null);
+          setPermissions([]);
+        }
         notify({
           kind: apiErr && apiErr.status === 422 ? 'warn' : 'error',
           title: apiErr ? `${label} blocked` : `${label} failed`,
@@ -113,8 +181,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AppState>(
-    () => ({ snap, user, loading, busy, toasts, setUser, refresh, run, notify, dismiss }),
-    [snap, user, loading, busy, toasts, refresh, run, notify, dismiss],
+    () => ({
+      snap,
+      user,
+      permissions,
+      loading,
+      restoring,
+      busy,
+      toasts,
+      can,
+      signIn,
+      signOut,
+      refresh,
+      run,
+      notify,
+      dismiss,
+    }),
+    [snap, user, permissions, loading, restoring, busy, toasts, can, signIn, signOut, refresh, run, notify, dismiss],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

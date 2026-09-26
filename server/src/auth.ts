@@ -218,6 +218,7 @@ function tokenFrom(req: Request): string | undefined {
 /** Attaches `req.user` when a valid token is present, but never rejects. */
 export function attachUser(req: Request, _res: Response, next: NextFunction): void {
   const user = userForToken(tokenFrom(req));
+  if (user) req.user = user;
   next();
 }
 
@@ -233,11 +234,13 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
 
 export function requirePermission(permission: Permission) {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    const user = req.user;
+    // Resolve independently of `attachUser` so this guard is safe to mount alone.
+    const user = req.user ?? userForToken(tokenFrom(req));
     if (!user) {
       next(new HttpError(401, 'Please sign in to continue.'));
       return;
     }
+    req.user = user;
     if (!can(user, permission)) {
       next(
         new HttpError(

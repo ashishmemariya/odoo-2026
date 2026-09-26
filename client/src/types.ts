@@ -174,11 +174,65 @@ export interface StorageLocation {
   status: 'Active' | 'Receiving' | 'Ready' | 'Chill Pass' | 'Locked';
 }
 
+export type Role = 'Admin' | 'Inventory Manager' | 'Warehouse Staff' | 'Floor Supervisor';
+
 export interface User {
+  id: string;
   name: string;
-  role: 'Inventory Manager' | 'Warehouse Staff' | 'Floor Supervisor';
+  email: string;
+  role: Role;
+  title: string;
   initials: string;
   auditorId: string;
+  active: boolean;
+}
+
+/** Safe subset of `User` published for the sign-in screen demo directory. */
+export interface DirectoryEntry {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  title: string;
+  initials: string;
+}
+
+export type Permission =
+  | 'product.view'
+  | 'product.manage'
+  | 'receipt.view'
+  | 'receipt.create'
+  | 'receipt.post'
+  | 'delivery.view'
+  | 'delivery.create'
+  | 'delivery.pick'
+  | 'delivery.post'
+  | 'transfer.view'
+  | 'transfer.create'
+  | 'transfer.post'
+  | 'adjustment.view'
+  | 'adjustment.create'
+  | 'adjustment.approve'
+  | 'count.view'
+  | 'count.create'
+  | 'count.approve'
+  | 'ledger.view'
+  | 'ledger.export'
+  | 'report.view'
+  | 'settings.manage'
+  | 'diagnostics.view'
+  | 'demo.reset'
+  | 'user.impersonate';
+
+export interface SessionInfo {
+  user: User;
+  permissions: Permission[];
+}
+
+export interface DiagnosticsReport {
+  runtime: { node: string; uptimeSeconds: number; storage: string; seedVersion: number };
+  counts: Record<string, number>;
+  guardrails: { id: string; label: string; active: boolean; thresholdPct?: number }[];
 }
 
 export interface Settings {
@@ -240,4 +294,5 @@ export interface Snapshot {
   ledger: LedgerEntry[];
   dashboard: DashboardSummary;
   scenario: ScenarioState;
+  me: SessionInfo | null;
 }

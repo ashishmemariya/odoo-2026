@@ -1,10 +1,13 @@
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { HashRouter, Route, Routes } from 'react-router-dom';
 import { AppProvider, useApp } from './store';
 import { MobileNav, SideNav, TopNav } from './components/shell';
 import { Toasts } from './components/chrome';
+import CommandPalette from './components/CommandPalette';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Card, Empty, Icon } from './components/ui';
 
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Products, { ProductDetail } from './pages/Products';
 import Receipts, { ReceiptDetail } from './pages/Receipts';
@@ -19,11 +22,11 @@ function Booting() {
   return (
     <div className="flex min-h-[70vh] items-center justify-center">
       <div className="flex flex-col items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-on-primary">
+        <div className="flex h-12 w-12 items-center justify-center rounded-card bg-primary text-on-primary">
           <Icon name="deployed_code" size={26} fill />
         </div>
-        <p className="flex items-center gap-2 text-[12.5px] font-semibold text-on-surface/55">
-          <Icon name="progress_activity" size={16} /> Connecting to the StockSense API…
+        <p className="flex items-center gap-2 text-[12.5px] font-semibold text-outline">
+          <Icon name="progress_activity" size={16} /> Loading your workspace…
         </p>
       </div>
     </div>
@@ -43,7 +46,23 @@ function Offline() {
 }
 
 function Shell() {
-  const { snap, loading } = useApp();
+  const { snap, loading, user, restoring } = useApp();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Ctrl/Cmd+K opens the command palette from anywhere in the workspace.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  if (restoring) return <Booting />;
+  if (!user) return <Login />;
 
   return (
     <div className="flex h-full">
@@ -86,6 +105,7 @@ function Shell() {
           )}
         </main>
       </div>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <Toasts />
     </div>
   );
@@ -104,5 +124,3 @@ export default function App() {
     </ErrorBoundary>
   );
 }
-
-export { Navigate };
