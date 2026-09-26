@@ -134,12 +134,12 @@ export function ScenarioBar() {
           </span>
           <span className="tnum">
             <Link to="/warehouse" className="text-tertiary hover:underline">
-              WH/Stock1 <b>{sc.steel.stock1}</b>
+              Heavy-Rack-01 <b>{sc.steel.rack}</b>
             </Link>
           </span>
           <span className="tnum">
             <Link to="/warehouse" className="text-tertiary hover:underline">
-              WH/Production <b>{sc.steel.production}</b>
+              WH-Production <b>{sc.steel.production}</b>
             </Link>
           </span>
           {sc.steel.total === 0 && (

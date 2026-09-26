@@ -13,8 +13,8 @@ import type {
  * Location hierarchy
  *
  * Balances are stored per *leaf* bin, but operations reference any node.
- * `WH/Stock1` is a container over `WH/Stock1/Heavy-Rack-01` and
- * `WH/Stock1/Bay04`, so reading a container must roll up its children.
+ * `WH/Stock` is a container over `WH/Stock/Heavy-Rack-01` and
+ * `WH/Stock/Bay-04`, so reading a container must roll up its children.
  * ------------------------------------------------------------------ */
 
 /** All storage keys that physically sit inside `code` (itself + descendants). */
@@ -60,7 +60,10 @@ export function drainFifo(
     if (want <= 0) break;
     const take = Math.min(p.stock[loc] ?? 0, want);
     if (take <= 0) continue;
-    p.stock[loc] = (p.stock[loc] ?? 0) - take;
+    const left = (p.stock[loc] ?? 0) - take;
+    // Drop emptied bins so a product's map only ever lists locations that hold stock.
+    if (left === 0) delete p.stock[loc];
+    else p.stock[loc] = left;
     taken[loc] = (taken[loc] ?? 0) + take;
     want -= take;
   }
@@ -450,6 +453,62 @@ export function requiresDualSignoff(a: Adjustment): boolean {
   const absImpact = Math.abs(a.valuationImpact);
   const pct = a.recorded === 0 ? 100 : (Math.abs(a.delta) / a.recorded) * 100;
   return absImpact >= s.dualSignoffThreshold || pct >= s.dualSignoffVariancePct;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reversals
+ *
+ * The ledger is append-only, so unwinding a posted document writes a
+ * counter-moving REVERSAL row instead of editing or deleting the original.
+ * That keeps "the ledger explains every balance" true even after a rewind.
+ * ------------------------------------------------------------------ */
+
+export interface ReversalLeg {
+  sku: string;
+  location: string;
+  /** signed change to apply at `location` */
+  delta: number;
+  /** the document row being counter-moved */
+  reverses: string;
+  note: string;
+}
+
+export function postReversal(legs: ReversalLeg[], user: string): LedgerEntry[] {
+  const db = getDb();
+  const entries: LedgerEntry[] = [];
+
+  for (const leg of legs) {
+    const p = findProduct(leg.sku);
+    if (!p) continue;
+
+    const current = p.stock[leg.location] ?? 0;
+    if (current + leg.delta < 0) {
+      throw new HttpError(
+        422,
+        `Cannot reverse ${leg.reverses}: ${leg.sku} holds only ${current} ${p.unit} at ${leg.location}`,
+      );
+    }
+
+    const next = current + leg.delta;
+    if (next === 0) delete p.stock[leg.location];
+    else p.stock[leg.location] = next;
+
+    entries.push(
+      postLedger({
+        type: 'REVERSAL',
+        ref: leg.reverses,
+        sku: leg.sku,
+        delta: leg.delta,
+        from: leg.delta < 0 ? leg.location : 'Reversal',
+        to: leg.delta < 0 ? 'Reversal' : leg.location,
+        user,
+        note: leg.note,
+      }),
+    );
+  }
+
+  commit();
+  return entries;
 }
 
 /* ------------------------------------------------------------------ *

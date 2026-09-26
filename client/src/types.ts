@@ -1,4 +1,4 @@
-export type Unit = 'kg' | 'Units' | 'Rolls' | 'spools' | 'packs';
+export type Unit = 'kg' | 'Units' | 'Rolls';
 export type ProductStatus = 'IN_STOCK' | 'LOW' | 'OUT';
 export type DocStatus =
   | 'Draft'
@@ -8,7 +8,13 @@ export type DocStatus =
   | 'Done'
   | 'Overdue'
   | 'Canceled';
-export type LedgerType = 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ADJUSTMENT';
+export type LedgerType =
+  | 'OPENING'
+  | 'RECEIPT'
+  | 'DELIVERY'
+  | 'TRANSFER'
+  | 'ADJUSTMENT'
+  | 'REVERSAL';
 export type AdjustmentReason =
   | 'Damaged in Transit'
   | 'Missing / Investigation'
@@ -276,7 +282,9 @@ export interface ScenarioState {
   steps: ScenarioStep[];
   currentStep: number;
   complete: boolean;
-  steel: { sku: string; total: number; stock1: number; production: number; rackA: number } | null;
+  /** true once the drill has been rewound and not yet finished */
+  started: boolean;
+  steel: { sku: string; total: number; rack: number; production: number } | null;
   refs: { receipt: string; transfer: string; delivery: string; adjustment: string };
 }
 

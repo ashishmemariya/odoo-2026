@@ -15,11 +15,12 @@ import {
   stockAt,
   totalStock,
 } from './engine.js';
-import { runScenarioStep, scenarioState } from './scenario.js';
+import { runScenarioStep, scenarioState, startDrill } from './scenario.js';
 import {
   SESSION_TTL_MS,
   activeSessionCount,
   attachUser,
+  clearSessions,
   currentUser,
   destroySession,
   login,
@@ -383,8 +384,18 @@ api.post('/scenario/run', requirePermission('transfer.post'), (req, res) => {
   res.json({ ...result, snapshot: { products: getDb().products.map((p) => ({ ...p, total: totalStock(p) })), ledger: getDb().ledger, dashboard: dashboardSummary() } });
 });
 
+/**
+ * Rewinds the drill to an empty rack so the four steps can be executed by hand.
+ * Writes counter-moving ledger rows rather than deleting any.
+ */
+api.post('/scenario/start-drill', requirePermission('demo.reset'), (req, res) => {
+  res.json(startDrill(currentUser(req).name));
+});
+
+/** Restores the canonical seeded system — the live state with 77 kg on hand. */
 api.post('/scenario/reset', requirePermission('demo.reset'), (_req, res) => {
   resetDb();
+  clearSessions();
   res.json(scenarioState());
 });
 

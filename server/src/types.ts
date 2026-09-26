@@ -121,8 +121,17 @@ export interface Adjustment {
   postedAt?: string;
 }
 
-/** `OPENING` is the seeded baseline; every later row is a real document event. */
-export type LedgerType = 'OPENING' | 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ADJUSTMENT';
+/**
+ * `OPENING` is the seeded baseline and `REVERSAL` unwinds a previously posted
+ * document. Both exist so that no ledger row ever has to be deleted or edited.
+ */
+export type LedgerType =
+  | 'OPENING'
+  | 'RECEIPT'
+  | 'DELIVERY'
+  | 'TRANSFER'
+  | 'ADJUSTMENT'
+  | 'REVERSAL';
 
 export interface LedgerEntry {
   id: string;
