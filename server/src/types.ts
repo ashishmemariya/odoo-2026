@@ -158,6 +158,9 @@ export interface StorageLocation {
   name: string;
   shortCode: string;
   warehouse: string;
+  /** parent container code; absent for roots. Enables roll-up balances. */
+  parent?: string;
+  container: boolean;
   type:
     | 'Internal Storage'
     | 'Heavy Floor'

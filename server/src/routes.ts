@@ -16,7 +16,7 @@ import {
   totalStock,
 } from './engine.js';
 import { runScenarioStep, scenarioState } from './scenario.js';
-import type { User } from './types.js';
+import type { Product, User } from './types.js';
 
 export const api = Router();
 
@@ -28,12 +28,7 @@ api.get('/snapshot', (_req, res) => {
   const db = getDb();
   res.json({
     ...db,
-    products: db.products.map((p) => ({
-      ...p,
-      total: totalStock(p),
-      free: freeToUse(p),
-      status: productStatus(p),
-    })),
+    products: db.products.map(productView),
     dashboard: dashboardSummary(),
     scenario: scenarioState(),
   });
@@ -59,16 +54,25 @@ api.patch('/settings', (req, res) => {
 
 /* ---------------------------- catalog ---------------------------- */
 
-api.get('/products', (req, res) => {
-  const q = String(req.query.q ?? '').toLowerCase();
-  const category = String(req.query.category ?? 'All');
-  const status = String(req.query.status ?? 'All');
-  let list = getDb().products.map((p) => ({
+/** Roll a product's raw leaf balances up into every location node. */
+function productView(p: Product) {
+  const db = getDb();
+  return {
     ...p,
     total: totalStock(p),
     free: freeToUse(p),
     status: productStatus(p),
-  }));
+    byLocation: db.locations
+      .map((l) => ({ code: l.code, name: l.name, qty: stockAt(p, l.code), container: l.container }))
+      .sort((a, b) => b.qty - a.qty),
+  };
+}
+
+api.get('/products', (req, res) => {
+  const q = String(req.query.q ?? '').toLowerCase();
+  const category = String(req.query.category ?? 'All');
+  const status = String(req.query.status ?? 'All');
+  let list = getDb().products.map(productView);
   if (q) {
     list = list.filter(
       (p) =>
@@ -87,14 +91,16 @@ api.get('/products/:sku', (req, res) => {
   if (!p) throw new HttpError(404, `SKU ${req.params.sku} not found`);
   const db = getDb();
   res.json({
-    ...p,
-    total: totalStock(p),
-    free: freeToUse(p),
-    status: productStatus(p),
-    byLocation: Object.entries(p.stock)
-      .map(([location, qty]) => ({ location, qty, freeQty: qty }))
-      .sort((a, b) => b.qty - a.qty),
+    ...productView(p),
     moves: db.ledger.filter((l) => l.sku === p.sku).slice(0, 60),
+    openOrders: [
+      ...db.deliveries
+        .filter((d) => d.status !== 'Done' && d.items.some((i) => i.sku === p.sku))
+        .map((d) => ({ ref: d.ref, kind: 'Delivery' as const, qty: d.items.find((i) => i.sku === p.sku)?.qty ?? 0, to: d.to, status: d.status })),
+      ...db.receipts
+        .filter((r) => r.status !== 'Done' && r.items.some((i) => i.sku === p.sku))
+        .map((r) => ({ ref: r.ref, kind: 'Receipt' as const, qty: r.items.find((i) => i.sku === p.sku)?.expected ?? 0, to: r.supplier, status: r.status })),
+    ],
   });
 });
 
@@ -214,8 +220,8 @@ api.post('/transfers', (req, res) => {
   res.json(doc);
 });
 
-api.post('/transfers/:ref/execute', (req, res) => {
-  const { doc, entry } = postTransfer(req.params.ref, String(req.body?.user ?? 'System'));
+api.post('/transfer/execute', (req, res) => {
+  const { doc, entry } = postTransfer(String(req.query.ref ?? ''), String(req.body?.user ?? 'System'));
   res.json({ ok: true, transfer: doc, ledger: entry });
 });
 
@@ -250,9 +256,9 @@ api.post('/adjustments', (req, res) => {
   res.json(doc);
 });
 
-api.post('/adjustments/:ref/post', (req, res) => {
+api.post('/adjustment/post', (req, res) => {
   const { doc, entry } = postAdjustment({
-    ref: req.params.ref,
+    ref: String(req.query.ref ?? ''),
     counted: Number(req.body?.counted ?? 0),
     reason: req.body?.reason,
     memo: req.body?.memo ?? '',
