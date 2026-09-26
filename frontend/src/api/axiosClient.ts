@@ -89,7 +89,7 @@ const clientMockAdapter: AxiosAdapter = async (config: InternalAxiosRequestConfi
 
     // --- DASHBOARD ---
     if (path === '/dashboard' && method === 'get') {
-      const metrics = mockDb.getDashboardMetrics();
+      const metrics = mockDb.getDashboardMetrics(queryObj);
       return {
         data: { success: true, data: metrics },
         status: 200,
@@ -104,6 +104,41 @@ const clientMockAdapter: AxiosAdapter = async (config: InternalAxiosRequestConfi
       const categories = mockDb.getCategories();
       return {
         data: { success: true, data: categories },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    }
+
+    if (path === '/products/categories' && method === 'post') {
+      const created = mockDb.createCategory(parsedBody);
+      return {
+        data: { success: true, data: created },
+        status: 201,
+        statusText: 'Created',
+        headers: {},
+        config,
+      };
+    }
+
+    if (path.startsWith('/products/categories/') && method === 'put') {
+      const id = path.replace('/products/categories/', '');
+      const updated = mockDb.updateCategory(id, parsedBody);
+      return {
+        data: { success: true, data: updated },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    }
+
+    if (path.startsWith('/products/categories/') && method === 'delete') {
+      const id = path.replace('/products/categories/', '');
+      mockDb.deleteCategory(id);
+      return {
+        data: { success: true, message: 'Category deleted' },
         status: 200,
         statusText: 'OK',
         headers: {},
@@ -183,6 +218,17 @@ const clientMockAdapter: AxiosAdapter = async (config: InternalAxiosRequestConfi
       };
     }
 
+    if (path === '/warehouses' && method === 'post') {
+      const created = mockDb.createWarehouse(parsedBody);
+      return {
+        data: { success: true, data: created },
+        status: 201,
+        statusText: 'Created',
+        headers: {},
+        config,
+      };
+    }
+
     // --- RECEIPTS ---
     if (path === '/receipts' && method === 'get') {
       const receipts = mockDb.getReceipts(queryObj);
@@ -211,6 +257,18 @@ const clientMockAdapter: AxiosAdapter = async (config: InternalAxiosRequestConfi
       const updated = mockDb.updateReceiptStatus(id, parsedBody.status);
       return {
         data: { success: true, data: updated },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    }
+
+    if (path.match(/\/receipts\/[^/]+\/cancel/) && method === 'put') {
+      const id = path.split('/')[2];
+      const canceled = mockDb.cancelReceipt(id);
+      return {
+        data: { success: true, data: canceled },
         status: 200,
         statusText: 'OK',
         headers: {},
@@ -265,6 +323,18 @@ const clientMockAdapter: AxiosAdapter = async (config: InternalAxiosRequestConfi
       };
     }
 
+    if (path.match(/\/deliveries\/[^/]+\/cancel/) && method === 'put') {
+      const id = path.split('/')[2];
+      const canceled = mockDb.cancelDelivery(id);
+      return {
+        data: { success: true, data: canceled },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    }
+
     if (path.match(/\/deliveries\/[^/]+\/validate/) && method === 'post') {
       const id = path.split('/')[2];
       const validated = mockDb.validateDelivery(id);
@@ -295,6 +365,18 @@ const clientMockAdapter: AxiosAdapter = async (config: InternalAxiosRequestConfi
         data: { success: true, data: created },
         status: 201,
         statusText: 'Created',
+        headers: {},
+        config,
+      };
+    }
+
+    if (path.match(/\/transfers\/[^/]+\/cancel/) && method === 'put') {
+      const id = path.split('/')[2];
+      const canceled = mockDb.cancelTransfer(id);
+      return {
+        data: { success: true, data: canceled },
+        status: 200,
+        statusText: 'OK',
         headers: {},
         config,
       };

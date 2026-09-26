@@ -11,6 +11,9 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts';
+import { useCategories } from '../../hooks/useProducts';
+import { useWarehouses } from '../../hooks/useWarehouses';
+import { useState } from 'react';
 import {
   Package,
   TrendingUp,
@@ -25,12 +28,41 @@ import {
   Sparkles,
   Layers,
   Building2,
+  Filter,
+  RotateCcw,
 } from 'lucide-react';
 
 export const DashboardPage = () => {
-  const { data, isLoading, error } = useDashboard();
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedDocType, setSelectedDocType] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
+  const { data: categories } = useCategories();
+  const { data: warehouses } = useWarehouses();
+
+  const queryParams = new URLSearchParams();
+  if (selectedWarehouse !== 'all') queryParams.set('warehouseId', selectedWarehouse);
+  if (selectedCategory !== 'all') queryParams.set('categoryId', selectedCategory);
+  if (selectedDocType !== 'all') queryParams.set('documentType', selectedDocType);
+  if (selectedStatus !== 'all') queryParams.set('status', selectedStatus);
+
+  const { data, isLoading, error } = useDashboard(queryParams.toString());
   const { data: allProducts } = useProducts();
   const navigate = useNavigate();
+
+  const isFiltered =
+    selectedWarehouse !== 'all' ||
+    selectedCategory !== 'all' ||
+    selectedDocType !== 'all' ||
+    selectedStatus !== 'all';
+
+  const resetFilters = () => {
+    setSelectedWarehouse('all');
+    setSelectedCategory('all');
+    setSelectedDocType('all');
+    setSelectedStatus('all');
+  };
 
   if (isLoading) {
     return (
@@ -111,6 +143,94 @@ export const DashboardPage = () => {
             <span>Stock Audit</span>
           </button>
         </div>
+      </div>
+
+      {/* DYNAMIC DASHBOARD FILTERS */}
+      <div className="p-3.5 rounded-2xl bg-card border border-border shadow-xs flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-foreground uppercase tracking-wider mr-1">
+          <Filter className="w-3.5 h-3.5 text-primary" />
+          <span>Filters:</span>
+        </div>
+
+        {/* Document Type */}
+        <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1.5 text-xs">
+          <span className="text-muted-foreground font-medium">Doc Type:</span>
+          <select
+            value={selectedDocType}
+            onChange={(e) => setSelectedDocType(e.target.value)}
+            className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
+          >
+            <option value="all" className="bg-popover text-popover-foreground">All Types</option>
+            <option value="Receipt" className="bg-popover text-popover-foreground">Receipts</option>
+            <option value="Delivery" className="bg-popover text-popover-foreground">Deliveries</option>
+            <option value="Transfer" className="bg-popover text-popover-foreground">Transfers</option>
+            <option value="Adjustment" className="bg-popover text-popover-foreground">Adjustments</option>
+          </select>
+        </div>
+
+        {/* Status */}
+        <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1.5 text-xs">
+          <span className="text-muted-foreground font-medium">Status:</span>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
+          >
+            <option value="all" className="bg-popover text-popover-foreground">All Statuses</option>
+            <option value="Draft" className="bg-popover text-popover-foreground">Draft</option>
+            <option value="Waiting" className="bg-popover text-popover-foreground">Waiting</option>
+            <option value="Ready" className="bg-popover text-popover-foreground">Ready</option>
+            <option value="Done" className="bg-popover text-popover-foreground">Done</option>
+            <option value="Canceled" className="bg-popover text-popover-foreground">Canceled</option>
+          </select>
+        </div>
+
+        {/* Location / Warehouse */}
+        <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1.5 text-xs">
+          <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground font-medium">Facility:</span>
+          <select
+            value={selectedWarehouse}
+            onChange={(e) => setSelectedWarehouse(e.target.value)}
+            className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
+          >
+            <option value="all" className="bg-popover text-popover-foreground">All Facilities</option>
+            {warehouses?.map((wh: any) => (
+              <option key={wh._id} value={wh._id} className="bg-popover text-popover-foreground">
+                {wh.name} ({wh.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Category */}
+        <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1.5 text-xs">
+          <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground font-medium">Category:</span>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
+          >
+            <option value="all" className="bg-popover text-popover-foreground">All Categories</option>
+            {categories?.map((cat: any) => (
+              <option key={cat._id} value={cat._id} className="bg-popover text-popover-foreground">
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Reset Filter Button */}
+        {isFiltered && (
+          <button
+            onClick={resetFilters}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-muted hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all ml-auto cursor-pointer"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset Filters</span>
+          </button>
+        )}
       </div>
 
       {/* KPI METRIC CARDS GRID */}

@@ -127,6 +127,7 @@ export interface StockLedgerEntry {
   balanceAfter: number;
   timestamp: string;
   notes?: string;
+  user?: string;
 }
 
 export interface User {
@@ -150,7 +151,6 @@ const KEYS = {
   TRANSFERS: `${STORAGE_PREFIX}transfers`,
   ADJUSTMENTS: `${STORAGE_PREFIX}adjustments`,
   LEDGER: `${STORAGE_PREFIX}ledger`,
-  RESET_TOKEN: `${STORAGE_PREFIX}reset_tokens`,
 };
 
 // INITIAL SEED DATA
@@ -224,7 +224,7 @@ const INITIAL_PRODUCTS: Product[] = [
     costPrice: 42.00,
     sellingPrice: 79.99,
     minStock: 15,
-    totalStock: 12, // LOW STOCK
+    totalStock: 12,
     warehouseStock: { 'wh-1': 7, 'wh-2': 5, 'wh-3': 0 },
     barcode: '8901234567891',
     createdAt: new Date(Date.now() - 28 * 86400000).toISOString(),
@@ -254,7 +254,7 @@ const INITIAL_PRODUCTS: Product[] = [
     costPrice: 18.00,
     sellingPrice: 36.50,
     minStock: 20,
-    totalStock: 4, // CRITICAL LOW
+    totalStock: 4,
     warehouseStock: { 'wh-1': 4, 'wh-2': 0, 'wh-3': 0 },
     barcode: '8901234567893',
     createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
@@ -284,7 +284,7 @@ const INITIAL_PRODUCTS: Product[] = [
     costPrice: 8.50,
     sellingPrice: 19.50,
     minStock: 10,
-    totalStock: 0, // OUT OF STOCK
+    totalStock: 0,
     warehouseStock: { 'wh-1': 0, 'wh-2': 0, 'wh-3': 0 },
     barcode: '8901234567895',
     createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
@@ -494,6 +494,7 @@ const INITIAL_LEDGER: StockLedgerEntry[] = [
     balanceAfter: 100,
     timestamp: new Date(Date.now() - 6 * 86400000).toISOString(),
     notes: 'Initial inbound shipment from Apex Micro',
+    user: 'Alex Harrison',
   },
   {
     _id: 'led-2',
@@ -507,6 +508,7 @@ const INITIAL_LEDGER: StockLedgerEntry[] = [
     balanceAfter: 80,
     timestamp: new Date(Date.now() - 6 * 86400000 + 3600000).toISOString(),
     notes: 'Outbound transfer to Pacific Coast',
+    user: 'Alex Harrison',
   },
   {
     _id: 'led-3',
@@ -520,6 +522,7 @@ const INITIAL_LEDGER: StockLedgerEntry[] = [
     balanceAfter: 20,
     timestamp: new Date(Date.now() - 6 * 86400000 + 7200000).toISOString(),
     notes: 'Inbound transfer received at Pacific Coast',
+    user: 'Alex Harrison',
   },
   {
     _id: 'led-4',
@@ -532,6 +535,7 @@ const INITIAL_LEDGER: StockLedgerEntry[] = [
     balanceAfter: 200,
     timestamp: new Date(Date.now() - 3 * 86400000).toISOString(),
     notes: 'Order fulfillment for Tesla Robotics',
+    user: 'Alex Harrison',
   },
   {
     _id: 'led-5',
@@ -544,6 +548,7 @@ const INITIAL_LEDGER: StockLedgerEntry[] = [
     balanceAfter: 60,
     timestamp: new Date(Date.now() - 3 * 86400000).toISOString(),
     notes: 'Order fulfillment for Tesla Robotics',
+    user: 'Alex Harrison',
   },
   {
     _id: 'led-6',
@@ -556,6 +561,7 @@ const INITIAL_LEDGER: StockLedgerEntry[] = [
     balanceAfter: 62,
     timestamp: new Date(Date.now() - 10 * 86400000).toISOString(),
     notes: 'Stock count surplus adjustment',
+    user: 'Alex Harrison',
   },
 ];
 
@@ -570,25 +576,51 @@ const INITIAL_USERS: User[] = [
   },
 ];
 
-class MockDbService {
+const memoryStore: Record<string, string> = {};
+
+function safeGetItem(key: string): string | null {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return memoryStore[key] || null;
+    }
+  }
+  return memoryStore[key] || null;
+}
+
+function safeSetItem(key: string, val: string): void {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(key, val);
+      return;
+    } catch {
+      memoryStore[key] = val;
+      return;
+    }
+  }
+  memoryStore[key] = val;
+}
+
+export class MockDbService {
   constructor() {
     this.init();
   }
 
   public init(forceReset = false): void {
-    if (!forceReset && localStorage.getItem(KEYS.PRODUCTS)) {
+    if (!forceReset && safeGetItem(KEYS.PRODUCTS)) {
       return;
     }
 
-    localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
-    localStorage.setItem(KEYS.WAREHOUSES, JSON.stringify(INITIAL_WAREHOUSES));
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-    localStorage.setItem(KEYS.RECEIPTS, JSON.stringify(INITIAL_RECEIPTS));
-    localStorage.setItem(KEYS.DELIVERIES, JSON.stringify(INITIAL_DELIVERIES));
-    localStorage.setItem(KEYS.TRANSFERS, JSON.stringify(INITIAL_TRANSFERS));
-    localStorage.setItem(KEYS.ADJUSTMENTS, JSON.stringify(INITIAL_ADJUSTMENTS));
-    localStorage.setItem(KEYS.LEDGER, JSON.stringify(INITIAL_LEDGER));
-    localStorage.setItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
+    safeSetItem(KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+    safeSetItem(KEYS.WAREHOUSES, JSON.stringify(INITIAL_WAREHOUSES));
+    safeSetItem(KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+    safeSetItem(KEYS.RECEIPTS, JSON.stringify(INITIAL_RECEIPTS));
+    safeSetItem(KEYS.DELIVERIES, JSON.stringify(INITIAL_DELIVERIES));
+    safeSetItem(KEYS.TRANSFERS, JSON.stringify(INITIAL_TRANSFERS));
+    safeSetItem(KEYS.ADJUSTMENTS, JSON.stringify(INITIAL_ADJUSTMENTS));
+    safeSetItem(KEYS.LEDGER, JSON.stringify(INITIAL_LEDGER));
+    safeSetItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
   }
 
   public resetAllData(): void {
@@ -596,21 +628,22 @@ class MockDbService {
   }
 
   // --- GENERIC GET & SAVE ---
-  private get<T>(key: string, defaultVal: T): T {
+  public get<T>(key: string, defaultVal: T): T {
     try {
-      const data = localStorage.getItem(key);
+      const data = safeGetItem(key);
       return data ? JSON.parse(data) : defaultVal;
     } catch {
       return defaultVal;
     }
   }
 
-  private set<T>(key: string, val: T): void {
-    localStorage.setItem(key, JSON.stringify(val));
+  public set<T>(key: string, val: T): void {
+    safeSetItem(key, JSON.stringify(val));
   }
 
   // --- AUTH ---
   public login(email: string, _pass?: string): { user: User; token: string } {
+    if (!email || !email.trim()) throw new Error('Email is required');
     const users = this.get<User[]>(KEYS.USERS, INITIAL_USERS);
     let user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
     if (!user) {
@@ -630,6 +663,9 @@ class MockDbService {
   }
 
   public signup(name: string, email: string): { user: User; token: string } {
+    if (!name || !name.trim()) throw new Error('Name is required');
+    if (!email || !email.includes('@')) throw new Error('Valid email is required');
+
     const users = this.get<User[]>(KEYS.USERS, INITIAL_USERS);
     const existing = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
     if (existing) {
@@ -651,24 +687,75 @@ class MockDbService {
     return { user, token };
   }
 
-  public updateProfile(data: { name: string; email: string }): User {
+  public updateProfile(data: { name: string; email: string; company?: string }): User {
     const users = this.get<User[]>(KEYS.USERS, INITIAL_USERS);
     let user = users[0];
     if (user) {
-      user.name = data.name;
-      user.email = data.email;
+      user.name = data.name || user.name;
+      user.email = data.email || user.email;
+      if (data.company) user.company = data.company;
       this.set(KEYS.USERS, users);
     }
     return user;
   }
 
-  // --- CATEGORIES & WAREHOUSES ---
+  // --- CATEGORIES ---
   public getCategories(): Category[] {
     return this.get<Category[]>(KEYS.CATEGORIES, INITIAL_CATEGORIES);
   }
 
+  public createCategory(data: { name: string; description?: string; color?: string }): Category {
+    if (!data.name || !data.name.trim()) throw new Error('Category name is required');
+    const categories = this.getCategories();
+    if (categories.some((c) => c.name.toLowerCase() === data.name.trim().toLowerCase())) {
+      throw new Error(`Category "${data.name}" already exists`);
+    }
+    const newCat: Category = {
+      _id: `cat-${Date.now()}`,
+      name: data.name.trim(),
+      description: data.description || '',
+      color: data.color || '#6366f1',
+    };
+    categories.push(newCat);
+    this.set(KEYS.CATEGORIES, categories);
+    return newCat;
+  }
+
+  public updateCategory(id: string, updates: Partial<Category>): Category {
+    const categories = this.getCategories();
+    const idx = categories.findIndex((c) => c._id === id);
+    if (idx === -1) throw new Error('Category not found');
+    categories[idx] = { ...categories[idx], ...updates };
+    this.set(KEYS.CATEGORIES, categories);
+    return categories[idx];
+  }
+
+  public deleteCategory(id: string): void {
+    let categories = this.getCategories();
+    categories = categories.filter((c) => c._id !== id);
+    this.set(KEYS.CATEGORIES, categories);
+  }
+
+  // --- WAREHOUSES ---
   public getWarehouses(): Warehouse[] {
     return this.get<Warehouse[]>(KEYS.WAREHOUSES, INITIAL_WAREHOUSES);
+  }
+
+  public createWarehouse(data: { name: string; code: string; address?: string }): Warehouse {
+    if (!data.name || !data.code) throw new Error('Warehouse name and code are required');
+    const warehouses = this.getWarehouses();
+    const newWh: Warehouse = {
+      _id: `wh-${Date.now()}`,
+      name: data.name,
+      code: data.code.toUpperCase(),
+      address: data.address || '',
+      locations: [
+        { _id: `loc-${Date.now()}-1`, name: 'Default Storage Area', type: 'Storage', code: `${data.code}-LOC-01` },
+      ],
+    };
+    warehouses.push(newWh);
+    this.set(KEYS.WAREHOUSES, warehouses);
+    return newWh;
   }
 
   // --- PRODUCTS ---
@@ -676,7 +763,7 @@ class MockDbService {
     let prods = this.get<Product[]>(KEYS.PRODUCTS, INITIAL_PRODUCTS);
 
     if (params?.search) {
-      const q = params.search.toLowerCase();
+      const q = params.search.toLowerCase().trim();
       prods = prods.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
@@ -693,8 +780,12 @@ class MockDbService {
       prods = prods.filter((p) => p.totalStock > p.minStock);
     }
 
-    if (params?.category) {
+    if (params?.category && params.category !== 'all') {
       prods = prods.filter((p) => p.categoryId?._id === params.category || p.categoryId?.name === params.category);
+    }
+
+    if (params?.warehouseId && params.warehouseId !== 'all') {
+      prods = prods.filter((p) => (p.warehouseStock?.[params.warehouseId] || 0) > 0);
     }
 
     return prods;
@@ -706,12 +797,26 @@ class MockDbService {
   }
 
   public createProduct(data: Partial<Product>): Product {
+    if (!data.name || !data.name.trim()) throw new Error('Product title is required');
+    if (!data.sku || !data.sku.trim()) throw new Error('Product SKU is required');
+
     const prods = this.get<Product[]>(KEYS.PRODUCTS, INITIAL_PRODUCTS);
+    const skuClean = data.sku.trim();
+
+    // DUPLICATE SKU VALIDATION
+    if (prods.some((p) => p.sku.toLowerCase() === skuClean.toLowerCase())) {
+      throw new Error(`Product with SKU "${skuClean}" already exists`);
+    }
+
     const categories = this.getCategories();
     const warehouses = this.getWarehouses();
 
     const category = categories.find((c) => c._id === (data as any).categoryId) || categories[0];
     const initialQty = Number(data.totalStock) || 0;
+
+    if (initialQty < 0) {
+      throw new Error('Initial stock quantity cannot be negative');
+    }
 
     const warehouseStock: Record<string, number> = {};
     if (warehouses[0]) {
@@ -720,14 +825,14 @@ class MockDbService {
 
     const newProd: Product = {
       _id: `prod-${Date.now()}`,
-      sku: data.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: data.name || 'Untitled Product',
+      sku: skuClean,
+      name: data.name.trim(),
       description: data.description || '',
       categoryId: category,
       uom: data.uom || 'pcs',
-      costPrice: Number(data.costPrice) || 10,
-      sellingPrice: Number(data.sellingPrice) || 20,
-      minStock: Number(data.minStock) || 15,
+      costPrice: Math.max(0, Number(data.costPrice) || 10),
+      sellingPrice: Math.max(0, Number(data.sellingPrice) || 20),
+      minStock: Math.max(0, Number(data.minStock) || 15),
       totalStock: initialQty,
       warehouseStock: warehouseStock,
       barcode: data.barcode || `890${Math.floor(1000000000 + Math.random() * 9000000000)}`,
@@ -747,6 +852,7 @@ class MockDbService {
         qty: initialQty,
         balanceAfter: initialQty,
         notes: 'Initial inventory stock on creation',
+        user: 'System Admin',
       });
     }
 
@@ -757,6 +863,16 @@ class MockDbService {
     const prods = this.get<Product[]>(KEYS.PRODUCTS, INITIAL_PRODUCTS);
     const idx = prods.findIndex((p) => p._id === id);
     if (idx === -1) throw new Error('Product not found');
+
+    if (updates.sku) {
+      const skuClean = updates.sku.trim();
+      const duplicate = prods.find((p) => p._id !== id && p.sku.toLowerCase() === skuClean.toLowerCase());
+      if (duplicate) {
+        throw new Error(`Another product with SKU "${skuClean}" already exists`);
+      }
+      updates.sku = skuClean;
+    }
+
     prods[idx] = { ...prods[idx], ...updates };
     this.set(KEYS.PRODUCTS, prods);
     return prods[idx];
@@ -771,8 +887,11 @@ class MockDbService {
   // --- RECEIPTS ---
   public getReceipts(params?: Record<string, string>): Receipt[] {
     let receipts = this.get<Receipt[]>(KEYS.RECEIPTS, INITIAL_RECEIPTS);
-    if (params?.status) {
+    if (params?.status && params.status !== 'all') {
       receipts = receipts.filter((r) => r.status.toLowerCase() === params.status.toLowerCase());
+    }
+    if (params?.warehouseId && params.warehouseId !== 'all') {
+      receipts = receipts.filter((r) => r.warehouseId?._id === params.warehouseId);
     }
     return receipts;
   }
@@ -783,6 +902,14 @@ class MockDbService {
     lines: Array<{ productId: string; expectedQty: number; unitCost?: number }>;
     notes?: string;
   }): Receipt {
+    if (!data.supplier || !data.supplier.trim()) throw new Error('Supplier name is required');
+    if (!data.warehouseId) throw new Error('Destination warehouse is required');
+    if (!data.lines || data.lines.length === 0) throw new Error('At least one product line is required');
+
+    for (const l of data.lines) {
+      if (Number(l.expectedQty) <= 0) throw new Error('Quantity must be greater than zero');
+    }
+
     const receipts = this.get<Receipt[]>(KEYS.RECEIPTS, INITIAL_RECEIPTS);
     const warehouses = this.getWarehouses();
     const prods = this.getProducts();
@@ -801,7 +928,7 @@ class MockDbService {
     const newReceipt: Receipt = {
       _id: `rec-${Date.now()}`,
       code: `REC-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(3, '0')}`,
-      supplier: data.supplier,
+      supplier: data.supplier.trim(),
       warehouseId: wh,
       lines: populatedLines,
       status: 'Draft',
@@ -825,11 +952,23 @@ class MockDbService {
     return item;
   }
 
+  public cancelReceipt(id: string): Receipt {
+    const receipts = this.get<Receipt[]>(KEYS.RECEIPTS, INITIAL_RECEIPTS);
+    const item = receipts.find((r) => r._id === id);
+    if (!item) throw new Error('Receipt not found');
+    if (item.status === 'Done') throw new Error('Cannot cancel an already validated receipt');
+    item.status = 'Canceled';
+    item.updatedAt = new Date().toISOString();
+    this.set(KEYS.RECEIPTS, receipts);
+    return item;
+  }
+
   public validateReceipt(id: string): Receipt {
     const receipts = this.get<Receipt[]>(KEYS.RECEIPTS, INITIAL_RECEIPTS);
     const item = receipts.find((r) => r._id === id);
     if (!item) throw new Error('Receipt not found');
-    if (item.status === 'Done') return item;
+    if (item.status === 'Done') return item; // idempotent protection
+    if (item.status === 'Canceled') throw new Error('Cannot validate a canceled receipt');
 
     const prods = this.get<Product[]>(KEYS.PRODUCTS, INITIAL_PRODUCTS);
     const whId = item.warehouseId._id;
@@ -854,6 +993,7 @@ class MockDbService {
           qty: qty,
           balanceAfter: prod.totalStock,
           notes: `Inbound receipt from ${item.supplier}`,
+          user: 'Alex Harrison',
         });
       }
     }
@@ -868,8 +1008,11 @@ class MockDbService {
   // --- DELIVERIES ---
   public getDeliveries(params?: Record<string, string>): Delivery[] {
     let deliveries = this.get<Delivery[]>(KEYS.DELIVERIES, INITIAL_DELIVERIES);
-    if (params?.status) {
+    if (params?.status && params.status !== 'all') {
       deliveries = deliveries.filter((d) => d.status.toLowerCase() === params.status.toLowerCase());
+    }
+    if (params?.warehouseId && params.warehouseId !== 'all') {
+      deliveries = deliveries.filter((d) => d.warehouseId?._id === params.warehouseId);
     }
     return deliveries;
   }
@@ -880,6 +1023,14 @@ class MockDbService {
     lines: Array<{ productId: string; qty: number; unitPrice?: number }>;
     notes?: string;
   }): Delivery {
+    if (!data.customer || !data.customer.trim()) throw new Error('Customer name is required');
+    if (!data.warehouseId) throw new Error('Source warehouse is required');
+    if (!data.lines || data.lines.length === 0) throw new Error('At least one product line is required');
+
+    for (const l of data.lines) {
+      if (Number(l.qty) <= 0) throw new Error('Quantity must be greater than zero');
+    }
+
     const deliveries = this.get<Delivery[]>(KEYS.DELIVERIES, INITIAL_DELIVERIES);
     const warehouses = this.getWarehouses();
     const prods = this.getProducts();
@@ -897,7 +1048,7 @@ class MockDbService {
     const newDelivery: Delivery = {
       _id: `del-${Date.now()}`,
       code: `DEL-${new Date().getFullYear()}-${String(deliveries.length + 1).padStart(3, '0')}`,
-      customer: data.customer,
+      customer: data.customer.trim(),
       warehouseId: wh,
       lines: populatedLines,
       status: 'Draft',
@@ -921,11 +1072,23 @@ class MockDbService {
     return item;
   }
 
+  public cancelDelivery(id: string): Delivery {
+    const deliveries = this.get<Delivery[]>(KEYS.DELIVERIES, INITIAL_DELIVERIES);
+    const item = deliveries.find((d) => d._id === id);
+    if (!item) throw new Error('Delivery not found');
+    if (item.status === 'Done') throw new Error('Cannot cancel an already dispatched delivery');
+    item.status = 'Canceled';
+    item.updatedAt = new Date().toISOString();
+    this.set(KEYS.DELIVERIES, deliveries);
+    return item;
+  }
+
   public validateDelivery(id: string): Delivery {
     const deliveries = this.get<Delivery[]>(KEYS.DELIVERIES, INITIAL_DELIVERIES);
     const item = deliveries.find((d) => d._id === id);
     if (!item) throw new Error('Delivery not found');
     if (item.status === 'Done') return item;
+    if (item.status === 'Canceled') throw new Error('Cannot validate a canceled delivery');
 
     const prods = this.get<Product[]>(KEYS.PRODUCTS, INITIAL_PRODUCTS);
     const whId = item.warehouseId._id;
@@ -960,6 +1123,7 @@ class MockDbService {
         qty: -line.qty,
         balanceAfter: prod.totalStock,
         notes: `Outbound delivery to ${item.customer}`,
+        user: 'Alex Harrison',
       });
     }
 
@@ -973,7 +1137,7 @@ class MockDbService {
   // --- TRANSFERS ---
   public getTransfers(params?: Record<string, string>): Transfer[] {
     let transfers = this.get<Transfer[]>(KEYS.TRANSFERS, INITIAL_TRANSFERS);
-    if (params?.status) {
+    if (params?.status && params.status !== 'all') {
       transfers = transfers.filter((t) => t.status.toLowerCase() === params.status.toLowerCase());
     }
     return transfers;
@@ -987,6 +1151,14 @@ class MockDbService {
     lines: Array<{ productId: string; qty: number }>;
     notes?: string;
   }): Transfer {
+    if (data.fromWarehouseId === data.toWarehouseId && data.fromLocationId === data.toLocationId) {
+      throw new Error('Source and destination location cannot be identical');
+    }
+
+    for (const l of data.lines) {
+      if (Number(l.qty) <= 0) throw new Error('Transfer quantity must be greater than zero');
+    }
+
     const transfers = this.get<Transfer[]>(KEYS.TRANSFERS, INITIAL_TRANSFERS);
     const warehouses = this.getWarehouses();
     const prods = this.getProducts();
@@ -1025,11 +1197,23 @@ class MockDbService {
     return newTransfer;
   }
 
+  public cancelTransfer(id: string): Transfer {
+    const transfers = this.get<Transfer[]>(KEYS.TRANSFERS, INITIAL_TRANSFERS);
+    const item = transfers.find((t) => t._id === id);
+    if (!item) throw new Error('Transfer not found');
+    if (item.status === 'Done') throw new Error('Cannot cancel an already completed transfer');
+    item.status = 'Canceled';
+    item.updatedAt = new Date().toISOString();
+    this.set(KEYS.TRANSFERS, transfers);
+    return item;
+  }
+
   public validateTransfer(id: string): Transfer {
     const transfers = this.get<Transfer[]>(KEYS.TRANSFERS, INITIAL_TRANSFERS);
     const item = transfers.find((t) => t._id === id);
     if (!item) throw new Error('Transfer not found');
     if (item.status === 'Done') return item;
+    if (item.status === 'Canceled') throw new Error('Cannot validate a canceled transfer');
 
     const prods = this.get<Product[]>(KEYS.PRODUCTS, INITIAL_PRODUCTS);
     const fromWhId = item.fromWarehouseId._id;
@@ -1054,17 +1238,20 @@ class MockDbService {
       prod.warehouseStock = prod.warehouseStock || {};
       prod.warehouseStock[fromWhId] = Math.max(0, (prod.warehouseStock[fromWhId] || 0) - line.qty);
       prod.warehouseStock[toWhId] = (prod.warehouseStock[toWhId] || 0) + line.qty;
+      // prod.totalStock remains identical!
 
       this.recordLedgerEntry({
         documentType: 'Transfer',
         documentCode: item.code,
         documentId: item._id,
         productId: prod,
+        warehouseId: item.fromWarehouseId,
         fromLocationId: item.fromLocationId,
         toLocationId: item.toLocationId,
         qty: -line.qty,
         balanceAfter: prod.totalStock,
         notes: `Transfer outbound to ${item.toWarehouseId.name}`,
+        user: 'Alex Harrison',
       });
 
       this.recordLedgerEntry({
@@ -1077,6 +1264,7 @@ class MockDbService {
         qty: line.qty,
         balanceAfter: prod.totalStock,
         notes: `Transfer inbound from ${item.fromWarehouseId.name}`,
+        user: 'Alex Harrison',
       });
     }
 
@@ -1090,7 +1278,7 @@ class MockDbService {
   // --- ADJUSTMENTS ---
   public getAdjustments(params?: Record<string, string>): Adjustment[] {
     let adjustments = this.get<Adjustment[]>(KEYS.ADJUSTMENTS, INITIAL_ADJUSTMENTS);
-    if (params?.status) {
+    if (params?.status && params.status !== 'all') {
       adjustments = adjustments.filter((a) => a.status.toLowerCase() === params.status.toLowerCase());
     }
     return adjustments;
@@ -1102,6 +1290,13 @@ class MockDbService {
     lines: Array<{ productId: string; systemQty: number; countedQty: number }>;
     notes?: string;
   }): Adjustment {
+    if (!data.warehouseId) throw new Error('Warehouse selection is required');
+    if (!data.lines || data.lines.length === 0) throw new Error('At least one item line is required');
+
+    for (const l of data.lines) {
+      if (Number(l.countedQty) < 0) throw new Error('Physical count cannot be negative');
+    }
+
     const adjustments = this.get<Adjustment[]>(KEYS.ADJUSTMENTS, INITIAL_ADJUSTMENTS);
     const warehouses = this.getWarehouses();
     const prods = this.getProducts();
@@ -1163,6 +1358,7 @@ class MockDbService {
           qty: delta,
           balanceAfter: prod.totalStock,
           notes: `Inventory adjustment (${item.reason})`,
+          user: 'Alex Harrison',
         });
       }
     }
@@ -1178,12 +1374,12 @@ class MockDbService {
   public getHistory(params?: Record<string, string>): { data: StockLedgerEntry[]; page: number; pages: number; total: number } {
     let ledger = this.get<StockLedgerEntry[]>(KEYS.LEDGER, INITIAL_LEDGER);
 
-    if (params?.type) {
+    if (params?.type && params.type !== 'all') {
       ledger = ledger.filter((l) => l.documentType.toLowerCase() === params.type.toLowerCase());
     }
 
     if (params?.search) {
-      const q = params.search.toLowerCase();
+      const q = params.search.toLowerCase().trim();
       ledger = ledger.filter(
         (l) =>
           l.documentCode.toLowerCase().includes(q) ||
@@ -1202,26 +1398,66 @@ class MockDbService {
     return { data: pagedData, page, pages, total };
   }
 
-  private recordLedgerEntry(entry: Omit<StockLedgerEntry, '_id' | 'timestamp'>): void {
+  public recordLedgerEntry(entry: Omit<StockLedgerEntry, '_id' | 'timestamp'>): void {
     const ledger = this.get<StockLedgerEntry[]>(KEYS.LEDGER, INITIAL_LEDGER);
     const newEntry: StockLedgerEntry = {
       ...entry,
       _id: `led-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       timestamp: new Date().toISOString(),
+      user: entry.user || 'Alex Harrison',
     };
     ledger.unshift(newEntry);
     this.set(KEYS.LEDGER, ledger);
   }
 
-  // --- DASHBOARD METRICS ---
-  public getDashboardMetrics() {
-    const prods = this.getProducts();
-    const receipts = this.getReceipts();
-    const deliveries = this.getDeliveries();
-    const transfers = this.getTransfers();
-    const ledger = this.get<StockLedgerEntry[]>(KEYS.LEDGER, INITIAL_LEDGER);
+  // --- DASHBOARD METRICS WITH DYNAMIC FILTERS ---
+  public getDashboardMetrics(filters?: {
+    warehouseId?: string;
+    categoryId?: string;
+    documentType?: string;
+    status?: string;
+  }) {
+    let prods = this.getProducts();
+    let receipts = this.getReceipts();
+    let deliveries = this.getDeliveries();
+    let transfers = this.getTransfers();
+    let adjustments = this.getAdjustments();
+    let ledger = this.get<StockLedgerEntry[]>(KEYS.LEDGER, INITIAL_LEDGER);
     const categories = this.getCategories();
     const warehouses = this.getWarehouses();
+
+    // 1. Warehouse / Location Filter
+    if (filters?.warehouseId && filters.warehouseId !== 'all') {
+      const whId = filters.warehouseId;
+      prods = prods.filter((p) => (p.warehouseStock?.[whId] || 0) > 0);
+      receipts = receipts.filter((r) => r.warehouseId?._id === whId);
+      deliveries = deliveries.filter((d) => d.warehouseId?._id === whId);
+      transfers = transfers.filter((t) => t.fromWarehouseId?._id === whId || t.toWarehouseId?._id === whId);
+      adjustments = adjustments.filter((a) => a.warehouseId?._id === whId);
+      ledger = ledger.filter((l) => l.warehouseId?._id === whId);
+    }
+
+    // 2. Product Category Filter
+    if (filters?.categoryId && filters.categoryId !== 'all') {
+      const catId = filters.categoryId;
+      prods = prods.filter((p) => p.categoryId?._id === catId || p.categoryId?.name === catId);
+      ledger = ledger.filter((l) => l.productId?.categoryId?._id === catId);
+    }
+
+    // 3. Status Filter
+    if (filters?.status && filters.status !== 'all') {
+      const s = filters.status.toLowerCase();
+      receipts = receipts.filter((r) => r.status.toLowerCase() === s);
+      deliveries = deliveries.filter((d) => d.status.toLowerCase() === s);
+      transfers = transfers.filter((t) => t.status.toLowerCase() === s);
+      adjustments = adjustments.filter((a) => a.status.toLowerCase() === s);
+    }
+
+    // 4. Document Type Filter for Ledger and Operations
+    if (filters?.documentType && filters.documentType !== 'all') {
+      const docType = filters.documentType.toLowerCase();
+      ledger = ledger.filter((l) => l.documentType.toLowerCase() === docType);
+    }
 
     const lowStockItems = prods.filter((p) => p.totalStock > 0 && p.totalStock <= p.minStock).length;
     const outOfStockItems = prods.filter((p) => p.totalStock === 0).length;
@@ -1231,6 +1467,7 @@ class MockDbService {
 
     const totalInventoryValue = prods.reduce((sum, p) => sum + p.totalStock * p.costPrice, 0);
 
+    // Build 30-day stock movement trend
     const trendMap: Record<string, { Inbound: number; Outbound: number }> = {};
     const now = new Date();
     for (let i = 29; i >= 0; i--) {
@@ -1266,6 +1503,7 @@ class MockDbService {
       const totalUnits = catProds.reduce((sum, p) => sum + p.totalStock, 0);
       const value = catProds.reduce((sum, p) => sum + p.totalStock * p.costPrice, 0);
       return {
+        id: cat._id,
         name: cat.name,
         color: cat.color || '#6366f1',
         units: totalUnits,
