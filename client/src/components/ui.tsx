@@ -8,21 +8,78 @@ const TONES = {
   Ready: 'bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]',
   Waiting: 'bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]',
   Done: 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
-  Overdue: 'bg-[#FFF1F2] text-[#BE123C] border-[#FECDD3]',
   Draft: 'bg-[#F1F5F9] text-[#475569] border-[#CBD5E1]',
+  Picking: 'bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]',
   Packed: 'bg-[#EEF2FF] text-[#4338CA] border-[#C7D2FE]',
+  'In Transit': 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
   Canceled: 'bg-[#F4F4F5] text-[#52525B] border-[#E4E4E7]',
   IN_STOCK: 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
   LOW: 'bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]',
   OUT: 'bg-[#FFF1F2] text-[#BE123C] border-[#FECDD3]',
   'Pending Approval': 'bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]',
-  Reconciled: 'bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]',
+  Approved: 'bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]',
   Posted: 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
   Active: 'bg-[#ECFDF5] text-[#047857] border-[#A7F3D0]',
   Receiving: 'bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]',
   'Chill Pass': 'bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]',
   Locked: 'bg-[#FFF1F2] text-[#BE123C] border-[#FECDD3]',
 } as const;
+
+/** Attention is an overlay on a status, never a status of its own. */
+const ATTENTION_TONES: Record<string, string> = {
+  Overdue: 'bg-[#FFF1F2] text-[#BE123C] border-[#FECDD3]',
+  'Awaiting approval': 'bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]',
+  Blocked: 'bg-[#FFF1F2] text-[#BE123C] border-[#FECDD3]',
+  Draft: 'bg-[#F1F5F9] text-[#475569] border-[#CBD5E1]',
+};
+
+export function AttentionBadge({ kind, daysLate = 0 }: { kind: string; daysLate?: number }) {
+  const tone = ATTENTION_TONES[kind] ?? ATTENTION_TONES.Draft;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${tone}`}
+    >
+      <Icon name="warning" size={12} fill />
+      {kind === 'Overdue' && daysLate > 0 ? `Overdue ${daysLate}d` : kind}
+    </span>
+  );
+}
+
+/** Horizontal stepper driven by the server's canonical flow. */
+export function StatusStepper({
+  flow,
+  stepIndex,
+  stepCount,
+}: {
+  flow: readonly string[];
+  stepIndex: number;
+  stepCount: number;
+}) {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1" aria-label="Progress">
+      {flow.slice(0, stepCount || flow.length).map((s, i) => {
+        const done = i < stepIndex;
+        const now = i === stepIndex;
+        return (
+          <li key={s} className="flex items-center gap-1.5">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10.5px] font-bold whitespace-nowrap ${
+                now
+                  ? 'border-primary bg-primary text-on-primary'
+                  : done
+                    ? 'border-success/40 bg-success/10 text-success'
+                    : 'border-outline-variant bg-surface-low text-on-surface/45'
+              }`}
+            >
+              {s}
+            </span>
+            {i < flow.length - 1 && <Icon name="chevron_right" size={12} className="text-outline" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 export type Tone = keyof typeof TONES;
 

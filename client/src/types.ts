@@ -1,13 +1,40 @@
 export type Unit = 'kg' | 'Units' | 'Rolls';
 export type ProductStatus = 'IN_STOCK' | 'LOW' | 'OUT';
+/**
+ * Mirrors the server's `status.ts`. `Overdue` is not a status: a late document
+ * stays in its own step and carries a derived `attention` flag instead.
+ */
 export type DocStatus =
   | 'Draft'
   | 'Waiting'
   | 'Ready'
+  | 'Picking'
   | 'Packed'
+  | 'In Transit'
   | 'Done'
-  | 'Overdue'
   | 'Canceled';
+
+export type AttentionKind = 'Overdue' | 'Awaiting approval' | 'Draft' | 'Blocked';
+
+export interface Attention {
+  kind: AttentionKind;
+  message: string;
+  daysLate: number;
+}
+
+/** Fields the API adds to every document it returns. */
+export interface DocumentMeta {
+  attention: Attention | null;
+  stepIndex: number;
+  stepCount: number;
+}
+
+export interface StatusFlows {
+  receipt: readonly string[];
+  delivery: readonly string[];
+  transfer: readonly string[];
+  adjustment: readonly string[];
+}
 export type LedgerType =
   | 'OPENING'
   | 'RECEIPT'
@@ -57,7 +84,7 @@ export interface ReceiptLine {
   variance: number;
 }
 
-export interface Receipt {
+export interface Receipt extends DocumentMeta {
   ref: string;
   supplier: string;
   supplierTier: 'Tier 1 Vendor' | 'Tier 2 Vendor' | 'Unverified';
@@ -94,7 +121,7 @@ export interface DeliveryLine {
   value: number;
 }
 
-export interface Delivery {
+export interface Delivery extends DocumentMeta {
   ref: string;
   from: string;
   to: string;
@@ -114,7 +141,7 @@ export interface Delivery {
   totalValue?: number;
 }
 
-export interface Transfer {
+export interface Transfer extends DocumentMeta {
   ref: string;
   from: string;
   to: string;
@@ -125,7 +152,7 @@ export interface Transfer {
   createdAt: string;
 }
 
-export interface Adjustment {
+export interface Adjustment extends DocumentMeta {
   ref: string;
   sku: string;
   location: string;

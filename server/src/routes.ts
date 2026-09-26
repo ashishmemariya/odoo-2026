@@ -16,8 +16,10 @@ import {
   totalStock,
 } from './engine.js';
 import {
+  ADJUSTMENT_FLOW,
   DELIVERY_FLOW,
   RECEIPT_FLOW,
+  TRANSFER_FLOW,
   adjustmentView,
   deliveryView,
   receiptView,
@@ -409,6 +411,19 @@ api.get('/ledger', (req, res) => {
 api.get('/warehouses', (_req, res) => res.json(getDb().warehouses));
 
 api.get('/locations', (_req, res) => res.json(getDb().locations));
+
+/**
+ * The canonical lifecycles, so the client renders steppers and filter chips from
+ * the same definition the engine validates against.
+ */
+api.get('/status-flows', (_req, res) =>
+  res.json({
+    receipt: RECEIPT_FLOW,
+    delivery: DELIVERY_FLOW,
+    transfer: TRANSFER_FLOW,
+    adjustment: ADJUSTMENT_FLOW,
+  }),
+);
 
 /* ---------------------------- scenario ---------------------------- */
 

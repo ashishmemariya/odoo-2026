@@ -53,23 +53,23 @@
   "credentials": [
     {
       "userId": "U-1001",
-      "salt": "079223fa0cb204b6b3d5a91eca4c3bc5",
-      "hash": "629ce5ffa61b6e4b4e2256e457bc0696ac197950e50f0affe9658f7d4050d182bd023aeca7040cbd4de49925afd16f1f62095af3fa859b112255fcec33f3ab01"
+      "salt": "5d29ddacab362b636f996ad82fc33991",
+      "hash": "76130cc765b8b9b3e112262cd239722442c388f9af85169011985a43939755251f589dec00c5f5311f4cabb583e614923c2f614903f5b0193c20544f9684586f"
     },
     {
       "userId": "U-1002",
-      "salt": "075450d50d8ba3deb0a46f297b20e571",
-      "hash": "3a950090d2864689ea6afe5307d0282a287b0caa4ea710a0843cfa2285168c2a58f269ccf2bc81f968914bf7a8ba7dcea96a828ae1ffe23bb82d083f896babd4"
+      "salt": "779a712a40b6837e21247b981cc963c1",
+      "hash": "fb110d63e458322c36ac2d64fd353396608810ec63a13f87157b2c6014aaa43bd20e4d9981e36facda0ccde3b097959c83fed16338cbc7ee2e309abcabd4d754"
     },
     {
       "userId": "U-1003",
-      "salt": "d91d4f76aa8c7df5d9bfd5e315e07370",
-      "hash": "540acafb1712730fc17459852dc0534037d174731ca89c558c0e3e8d3473ee96dbea99025037c24eda551245348558e193a0487737f03f3df404b5119e93e036"
+      "salt": "e6f74da2c06c0d2a03df9c5b3656c6e8",
+      "hash": "6401695cfbb967fb228b1b4b22b7f9746f3cb2633550d5a9d75d408f2f81fd93cb49df2686f9695d6134fd57574179a07b2ea845bf1c1377235f8034dcbd4bbb"
     },
     {
       "userId": "U-1004",
-      "salt": "5529a6c2b26f758096383ae18264a4c5",
-      "hash": "e5344aa77415f6054d18f036b42d02e5870799210e5bae63c62005a25058f3848cddd6c79b798c32af76495bb4ebd5e19e1680000a47a5206d363e5864a78ca7"
+      "salt": "97d501519fbab1736b7387a3a4265575",
+      "hash": "32b45847c24a7c7ec7cd84b8fe10083e81291121678da870079e0ecc6c282daba6c532b1fe68b0beb719458b2c633616c800086f28faaf05d7ed95479e19b803"
     }
   ],
   "warehouses": [
@@ -595,7 +595,9 @@
       "qty": 100,
       "requestedBy": "Priya Patel",
       "status": "Done",
-      "createdAt": "2026-03-02 11:20"
+      "scheduledDate": "2026-03-02 11:20",
+      "createdAt": "2026-03-02 11:20",
+      "postedAt": "2026-03-02 12:05"
     },
     {
       "ref": "TR-2002",
@@ -605,6 +607,7 @@
       "qty": 4,
       "requestedBy": "Rahul Sharma",
       "status": "Waiting",
+      "scheduledDate": "2026-09-26 15:00",
       "createdAt": "2026-09-26 07:30"
     },
     {
@@ -615,6 +618,7 @@
       "qty": 4,
       "requestedBy": "Priya Patel",
       "status": "Draft",
+      "scheduledDate": "2026-09-28 10:00",
       "createdAt": "2026-09-25 16:20"
     }
   ],
