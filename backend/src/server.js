@@ -2,11 +2,14 @@ import app from './app.js';
 import env from './config/env.js';
 import connectDB from './config/db.js';
 import mongoose from 'mongoose';
+import { seedDatabase } from './seed.js';
 
 const startServer = async () => {
   // Connect to MongoDB
   try {
     await connectDB();
+    // Seed initial demo data if database is empty
+    await seedDatabase().catch((err) => console.error('Seed error:', err.message));
   } catch (_error) {
     console.warn(
       '⚠️  Continuing server startup. MongoDB will retry on subsequent operations or when service is available.',

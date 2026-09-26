@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test src/tests/unit.test.js src/tests/auth.controller.test.js src/tests/auth.middleware.test.js"
+    "seed": "node src/seed.js",
+    "test": "node --test src/tests/unit.test.js src/tests/auth.controller.test.js src/tests/auth.middleware.test.js src/tests/inventory.e2e.test.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -17,5 +18,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.14.1"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0"
   }
 }
