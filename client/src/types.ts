@@ -1,23 +1,22 @@
-/** Shared domain model for StockSense ERP. Mirrors the wireframe source-of-truth. */
-
-export type LocationCode =
-  | 'WH/Stock1'
-  | 'WH/Stock1/Heavy-Rack-01'
-  | 'WH/Stock1/Bay04'
-  | 'WH/Stock2'
-  | 'WH/Stock2/RackB'
-  | 'WH/Production'
-  | 'WH/Rack-A'
-  | 'WH/Input'
-  | 'WH/Input/Dock-02N'
-  | 'WH/Output/Dock-01'
-  | 'WH/Cold-Zone'
-  | 'WH/Cold/Vault-L1'
-  | 'WH/Quarantine-Zone';
-
 export type Unit = 'kg' | 'Units' | 'Rolls' | 'spools' | 'packs';
-
 export type ProductStatus = 'IN_STOCK' | 'LOW' | 'OUT';
+export type DocStatus =
+  | 'Draft'
+  | 'Waiting'
+  | 'Ready'
+  | 'Packed'
+  | 'Done'
+  | 'Overdue'
+  | 'Canceled';
+export type LedgerType = 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ADJUSTMENT';
+export type AdjustmentReason =
+  | 'Damaged in Transit'
+  | 'Missing / Investigation'
+  | 'Incorrect Entry / Counting Error'
+  | 'Scrap / Wear & Tear'
+  | 'Supplier Surplus'
+  | 'Other';
+export type AdjustmentState = 'Pending Approval' | 'Reconciled' | 'Posted';
 
 export interface Product {
   id: string;
@@ -26,16 +25,17 @@ export interface Product {
   category: string;
   unit: Unit;
   unitCost: number;
-  /** reorder / safety-stock threshold */
   reorderPoint: number;
-  /** qty committed to open outbound orders (soft reservation) */
   reserved: number;
-  /** physical on-hand, keyed by location code */
   stock: Record<string, number>;
   icon: string;
+  total: number;
+  free: number;
+  status: ProductStatus;
+  byLocation?: { code: string; name: string; qty: number; container: boolean }[];
+  moves?: LedgerEntry[];
+  openOrders?: { ref: string; kind: 'Delivery' | 'Receipt'; qty: number; to: string; status: string }[];
 }
-
-export type DocStatus = 'Draft' | 'Waiting' | 'Ready' | 'Packed' | 'Done' | 'Overdue' | 'Canceled';
 
 export interface ReceiptLine {
   sku: string;
@@ -44,6 +44,11 @@ export interface ReceiptLine {
   bin: string;
   lot: string;
   barcode: string;
+  name: string;
+  unit: Unit;
+  unitCost: number;
+  lineValue: number;
+  variance: number;
 }
 
 export interface Receipt {
@@ -52,7 +57,7 @@ export interface Receipt {
   supplierTier: 'Tier 1 Vendor' | 'Tier 2 Vendor' | 'Unverified';
   poRef: string;
   bolRef: string;
-  destination: LocationCode;
+  destination: string;
   contact: string;
   scheduledDate: string;
   carrier: string;
@@ -63,17 +68,29 @@ export interface Receipt {
   createdAt: string;
   createdBy: string;
   postedAt?: string;
+  lines?: ReceiptLine[];
+  totalValue?: number;
 }
 
 export interface DeliveryLine {
   sku: string;
   qty: number;
   bin: string;
+  name: string;
+  unit: Unit;
+  unitCost: number;
+  availableAtSource: number;
+  availableTotal: number;
+  pullFrom: string;
+  reason: string;
+  sufficient: boolean;
+  shortfall: number;
+  value: number;
 }
 
 export interface Delivery {
   ref: string;
-  from: LocationCode;
+  from: string;
   to: string;
   contact: string;
   address: string;
@@ -86,12 +103,15 @@ export interface Delivery {
   createdAt: string;
   createdBy: string;
   postedAt?: string;
+  check?: { ref: string; lines: unknown[]; blocked: boolean; blockers: string[]; alreadyPosted: boolean };
+  lines?: DeliveryLine[];
+  totalValue?: number;
 }
 
 export interface Transfer {
   ref: string;
-  from: LocationCode;
-  to: LocationCode;
+  from: string;
+  to: string;
   sku: string;
   qty: number;
   requestedBy: string;
@@ -99,20 +119,10 @@ export interface Transfer {
   createdAt: string;
 }
 
-export type AdjustmentReason =
-  | 'Damaged in Transit'
-  | 'Missing / Investigation'
-  | 'Incorrect Entry / Counting Error'
-  | 'Scrap / Wear & Tear'
-  | 'Supplier Surplus'
-  | 'Other';
-
-export type AdjustmentState = 'Pending Approval' | 'Reconciled' | 'Posted';
-
 export interface Adjustment {
   ref: string;
   sku: string;
-  location: LocationCode;
+  location: string;
   recorded: number;
   counted: number;
   delta: number;
@@ -123,9 +133,8 @@ export interface Adjustment {
   valuationImpact: number;
   createdAt: string;
   postedAt?: string;
+  dualSignoff?: boolean;
 }
-
-export type LedgerType = 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ADJUSTMENT';
 
 export interface LedgerEntry {
   id: string;
@@ -134,7 +143,6 @@ export interface LedgerEntry {
   ref: string;
   sku: string;
   name: string;
-  /** signed change of the *global* balance; transfers are 0 */
   delta: number;
   from: string;
   to: string;
@@ -146,7 +154,7 @@ export interface LedgerEntry {
 export interface Warehouse {
   code: string;
   name: string;
-  type: 'Main Fulfillment' | 'Cold Chain' | 'Transit Hub';
+  type: string;
   address: string;
   manager: string;
   capacityUsedPct: number;
@@ -158,16 +166,9 @@ export interface StorageLocation {
   name: string;
   shortCode: string;
   warehouse: string;
-  /** parent container code; absent for roots. Enables roll-up balances. */
   parent?: string;
   container: boolean;
-  type:
-    | 'Internal Storage'
-    | 'Heavy Floor'
-    | 'Cold Chain'
-    | 'Inward Dock'
-    | 'Outward Pack'
-    | 'Quarantine';
+  type: string;
   skuCount: number;
   maxLoad: string;
   status: 'Active' | 'Receiving' | 'Ready' | 'Chill Pass' | 'Locked';
@@ -186,24 +187,16 @@ export interface User {
   active: boolean;
 }
 
-/**
- * Password material is deliberately kept OUT of `User` so that any code path which
- * serialises users (snapshot, `/api/users`, notifications) can never leak a hash.
- */
-export interface CredentialRecord {
-  userId: string;
-  salt: string;
-  hash: string;
+/** Safe subset of `User` published for the sign-in screen demo directory. */
+export interface DirectoryEntry {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  title: string;
+  initials: string;
 }
 
-export interface AuthSession {
-  token: string;
-  userId: string;
-  issuedAt: string;
-  expiresAt: string;
-}
-
-/** Coarse capability list driving UI visibility and server-side enforcement. */
 export type Permission =
   | 'product.view'
   | 'product.manage'
@@ -231,6 +224,16 @@ export type Permission =
   | 'demo.reset'
   | 'user.impersonate';
 
+export interface SessionInfo {
+  user: User;
+  permissions: Permission[];
+}
+
+export interface DiagnosticsReport {
+  runtime: { node: string; uptimeSeconds: number; storage: string; seedVersion: number };
+  counts: Record<string, number>;
+  guardrails: { id: string; label: string; active: boolean; thresholdPct?: number }[];
+}
 
 export interface Settings {
   valuationMethod: 'FIFO' | 'AVCO';
@@ -241,11 +244,46 @@ export interface Settings {
   currency: string;
 }
 
-export interface Database {
+export interface DashboardSummary {
+  catalogSkus: number;
+  totalOnHand: number;
+  freeToAllocate: number;
+  reserved: number;
+  valuation: number;
+  lowStock: Product[];
+  pendingReceipts: number;
+  pendingDeliveries: number;
+  waitingDeliveries: number;
+  readyDeliveries: number;
+  doneDeliveries: number;
+  overdueDeliveries: number;
+  lateReceipts: number;
+  scheduledTransfers: number;
+  pendingAdjustments: number;
+  ledgerEntries: number;
+}
+
+export interface ScenarioStep {
+  key: string;
+  index: number;
+  title: string;
+  detail: string;
+  completed: boolean;
+  active: boolean;
+}
+
+export interface ScenarioState {
+  steps: ScenarioStep[];
+  currentStep: number;
+  complete: boolean;
+  steel: { sku: string; total: number; stock1: number; production: number; rackA: number } | null;
+  refs: { receipt: string; transfer: string; delivery: string; adjustment: string };
+}
+
+export interface Snapshot {
   version: number;
   settings: Settings;
   users: User[];
-  credentials: CredentialRecord[];
   warehouses: Warehouse[];
   locations: StorageLocation[];
   products: Product[];
@@ -254,4 +292,7 @@ export interface Database {
   transfers: Transfer[];
   adjustments: Adjustment[];
   ledger: LedgerEntry[];
+  dashboard: DashboardSummary;
+  scenario: ScenarioState;
+  me: SessionInfo | null;
 }

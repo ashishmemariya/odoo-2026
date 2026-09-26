@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from '
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Database } from './types.js';
-import { buildSeed } from './seed.js';
+import { buildSeed, SEED_VERSION } from './seed.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = resolve(here, '../data/db.json');
@@ -15,6 +15,11 @@ function load(): Database {
   if (existsSync(DB_PATH)) {
     try {
       const parsed = JSON.parse(readFileSync(DB_PATH, 'utf8')) as Database;
+      // A stale schema (e.g. before credentials existed) must not boot; reseed instead.
+      if (parsed.version !== SEED_VERSION) throw new Error('schema version mismatch');
+      if (!Array.isArray(parsed.credentials) || parsed.credentials.length === 0) {
+        throw new Error('missing credentials');
+      }
       ledgerSeq = parsed.ledger.length;
       docSeq = {
         receipt: maxRef(parsed.receipts.map((r) => r.ref)) + 1,

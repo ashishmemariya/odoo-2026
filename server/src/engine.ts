@@ -10,6 +10,64 @@ import type {
 } from './types.js';
 
 /* ------------------------------------------------------------------ *
+ * Location hierarchy
+ *
+ * Balances are stored per *leaf* bin, but operations reference any node.
+ * `WH/Stock1` is a container over `WH/Stock1/Heavy-Rack-01` and
+ * `WH/Stock1/Bay04`, so reading a container must roll up its children.
+ * ------------------------------------------------------------------ */
+
+/** All storage keys that physically sit inside `code` (itself + descendants). */
+export function locationScope(code: string): string[] {
+  const locations = getDb().locations;
+  const scope = new Set<string>([code]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const l of locations) {
+      if (l.parent && scope.has(l.parent) && !scope.has(l.code)) {
+        scope.add(l.code);
+        grew = true;
+      }
+    }
+  }
+  return [...scope];
+}
+
+export function isContainer(code: string): boolean {
+  return getDb().locations.find((l) => l.code === code)?.container ?? false;
+}
+
+/**
+ * Drain up to `qty` from the `preferred` subtree, FIFO by bin code, then from
+ * the deepest remaining leaves network-wide. Never drives a bin below zero.
+ * Returns the concrete leaves drawn from.
+ */
+export function drainFifo(
+  p: Product,
+  preferred: string,
+  qty: number,
+): { taken: Record<string, number>; total: number; unmet: number } {
+  const inScope = locationScope(preferred);
+  const rest = Object.keys(p.stock)
+    .filter((k) => !inScope.includes(k) && (p.stock[k] ?? 0) > 0)
+    .sort((a, b) => (p.stock[b] ?? 0) - (p.stock[a] ?? 0));
+  const order = [...inScope.filter((k) => (p.stock[k] ?? 0) > 0).sort(), ...rest];
+
+  const taken: Record<string, number> = {};
+  let want = qty;
+  for (const loc of order) {
+    if (want <= 0) break;
+    const take = Math.min(p.stock[loc] ?? 0, want);
+    if (take <= 0) continue;
+    p.stock[loc] = (p.stock[loc] ?? 0) - take;
+    taken[loc] = (taken[loc] ?? 0) + take;
+    want -= take;
+  }
+  return { taken, total: qty - want, unmet: want };
+}
+
+/* ------------------------------------------------------------------ *
  * Core inventory primitives
  * ------------------------------------------------------------------ */
 
@@ -17,9 +75,9 @@ export function totalStock(p: Product): number {
   return Object.values(p.stock).reduce((a, b) => a + b, 0);
 }
 
-/** Quantity physically available at a specific location (0 when unknown). */
+/** Quantity physically available in a location subtree (0 when unknown). */
 export function stockAt(p: Product, location: string): number {
-  return p.stock[location] ?? 0;
+  return locationScope(location).reduce((sum, key) => sum + (p.stock[key] ?? 0), 0);
 }
 
 /** On-hand minus soft reservations. Never negative. */
@@ -38,11 +96,33 @@ export function findProduct(sku: string): Product | undefined {
   return getDb().products.find((p) => p.sku === sku);
 }
 
-/** First location holding at least `qty`, preferring the requested source. */
+/**
+ * FIFO: leaf bins inside `preferred`, ordered by bin code so consumption is
+ * deterministic. Returns the concrete leaves that satisfy `qty`, or null.
+ */
+export function fifoPicks(p: Product, preferred: string, qty: number): string[] | null {
+  const scope = locationScope(preferred).filter((k) => (p.stock[k] ?? 0) > 0).sort();
+  const picks: string[] = [];
+  let remaining = qty;
+  for (const k of scope) {
+    if (remaining <= 0) break;
+    const avail = p.stock[k] ?? 0;
+    const take = Math.min(avail, remaining);
+    if (take <= 0) continue;
+    picks.push(k);
+    remaining -= take;
+  }
+  return remaining <= 0 ? picks : null;
+}
+
+/** Preferred source, else the subtree with the deepest holdings. */
 export function pickSource(p: Product, preferred: string, qty: number): string | null {
   if (stockAt(p, preferred) >= qty) return preferred;
-  const keys = Object.keys(p.stock).sort((a, b) => stockAt(p, b) - stockAt(p, a));
-  for (const k of keys) if (stockAt(p, k) >= qty) return k;
+  const roots = getDb().locations.filter((l) => !l.parent).map((l) => l.code);
+  const ranked = roots
+    .map((code) => ({ code, qty: stockAt(p, code) }))
+    .sort((a, b) => b.qty - a.qty);
+  for (const r of ranked) if (r.qty >= qty) return r.code;
   return null;
 }
 
@@ -176,20 +256,18 @@ export function postDelivery(ref: string, user: string): { doc: Delivery; entrie
   for (const line of doc.items) {
     const p = findProduct(line.sku);
     if (!p) continue;
-    let remaining = line.qty;
 
-    // FIFO: consume from source bay first, then the largest other holding bay.
-    const order: string[] = [line.pullFrom, ...Object.keys(p.stock).filter((k) => k !== line.pullFrom)];
-    const taken: Record<string, number> = {};
+    // The pre-check already resolved where this line can be served from, so
+    // the post and the on-screen preview always agree.
+    const plan = check.lines.find((c) => c.sku === line.sku);
+    const preferred = plan?.pullFrom ?? doc.from;
+    const { taken, unmet } = drainFifo(p, preferred, line.qty);
 
-    for (const loc of order) {
-      if (remaining <= 0) break;
-      const avail = stockAt(p, loc);
-      if (avail <= 0) continue;
-      const take = Math.min(avail, remaining);
-      p.stock[loc] = zeroFloor ? avail - take : Math.max(0, avail - take);
-      taken[loc] = (taken[loc] ?? 0) + take;
-      remaining -= take;
+    if (unmet > 0 && zeroFloor) {
+      throw new HttpError(
+        422,
+        `Validation blocked — ${line.sku}: short ${unmet} ${p.unit} at posting time`,
+      );
     }
 
     p.reserved = Math.max(0, p.reserved - line.qty);
@@ -199,11 +277,17 @@ export function postDelivery(ref: string, user: string): { doc: Delivery; entrie
         type: 'DELIVERY',
         ref: doc.ref,
         sku: p.sku,
-        delta: -line.qty,
-        from: Object.keys(taken).join(' + ') || doc.from,
+        delta: -(line.qty - unmet),
+        from:
+          Object.entries(taken)
+            .map(([k, v]) => `${k} (-${v})`)
+            .join(' + ') || doc.from,
         to: `${doc.to} (${doc.contact})`,
         user,
-        note: `Dispatch validated against ${doc.operationType}.`,
+        note:
+          unmet > 0
+            ? `Dispatch validated with ${unmet} ${p.unit} unmet (negative-stock guardrail off).`
+            : `Dispatch validated against ${doc.operationType}.`,
       }),
     );
   }
@@ -262,15 +346,25 @@ export function postTransfer(ref: string, user: string): { doc: Transfer; entry:
   const p = findProduct(doc.sku);
   if (!p) throw new HttpError(404, `SKU ${doc.sku} not found`);
 
-  if (db.settings.preventNegativeStock && stockAt(p, doc.from) < doc.qty) {
+  if (doc.from === doc.to) throw new HttpError(400, 'Source and destination are identical');
+
+  const available = stockAt(p, doc.from);
+  if (db.settings.preventNegativeStock && available < doc.qty) {
     throw new HttpError(
       422,
-      `Cannot move ${doc.qty} ${p.unit} — only ${stockAt(p, doc.from)} available at ${doc.from}`,
+      `Cannot move ${doc.qty} ${p.unit} — only ${available} available in ${doc.from}`,
     );
   }
 
   const before = totalStock(p);
-  p.stock[doc.from] = Math.max(0, (p.stock[doc.from] ?? 0) - doc.qty);
+
+  // Drain FIFO leaves inside the source subtree.
+  const { taken, unmet } = drainFifo(p, doc.from, doc.qty);
+  if (unmet > 0) {
+    throw new HttpError(422, `Insufficient stock in ${doc.from} to execute ${ref}`);
+  }
+
+  // Land in the destination container's own key (roll-up makes it visible).
   p.stock[doc.to] = (p.stock[doc.to] ?? 0) + doc.qty;
   const after = totalStock(p);
 
@@ -284,10 +378,10 @@ export function postTransfer(ref: string, user: string): { doc: Transfer; entry:
     ref: doc.ref,
     sku: p.sku,
     delta: 0,
-    from: doc.from,
+    from: Object.keys(taken).join(', ') || doc.from,
     to: doc.to,
     user,
-    note: `Internal relocation — net-zero effect on enterprise balance.`,
+    note: 'Internal relocation — net-zero effect on enterprise balance.',
   });
   commit();
   return { doc, entry };
