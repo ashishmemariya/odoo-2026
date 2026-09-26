@@ -83,18 +83,48 @@ export function getDb(): Database {
   return db;
 }
 
+/**
+ * MongoDB writes must never overlap: the driver rewrites whole collections, so
+ * two concurrent flushes would interleave their delete/inserts and duplicate
+ * every document. One write runs at a time and a burst of mutations coalesces
+ * into a single follow-up flush of the latest state.
+ */
+let flushing = false;
+let dirty = false;
+
+async function flushMongo(): Promise<void> {
+  if (flushing) {
+    dirty = true;
+    return;
+  }
+  flushing = true;
+  try {
+    do {
+      dirty = false;
+      await writeMongo(db, seq);
+    } while (dirty);
+  } catch (err) {
+    console.error(`[store] MongoDB write failed: ${(err as Error).message}`);
+  } finally {
+    flushing = false;
+  }
+}
+
 export function commit(next: Database = db): Database {
   db = next;
   if (backend === 'mongodb') {
-    // Fire-and-forget: the request is already answered from `db`, and a write
-    // failure surfaces on the next boot rather than half-way through a request.
-    void writeMongo(db, seq).catch((err) =>
-      console.error(`[store] MongoDB write failed: ${(err as Error).message}`),
-    );
+    // The request is already answered from `db`; a write failure surfaces on the
+    // next boot rather than half-way through a request.
+    void flushMongo();
   } else {
     file.writeFile_(db);
   }
   return db;
+}
+
+/** Resolves once every queued write has landed — used by boot and by tests. */
+export async function flush(): Promise<void> {
+  await flushMongo();
 }
 
 export function resetDb(): Database {
@@ -108,8 +138,11 @@ export function resetDb(): Database {
 export async function hardReset(): Promise<void> {
   db = buildSeed();
   seq = { ...file.SEED_SEQ, ledger: db.ledger.length };
-  if (backend === 'mongodb') await writeMongo(db, seq);
-  else {
+  if (backend === 'mongodb') {
+    // Drain anything already queued, then write the seed as the final state.
+    await flush();
+    await writeMongo(db, seq);
+  } else {
     file.removeFile();
     file.writeFile_(db);
   }

@@ -1,5 +1,6 @@
 import type {
   AdjustmentReason,
+  AppMetadata,
   Delivery,
   DiagnosticsReport,
   DirectoryEntry,
@@ -80,6 +81,7 @@ export const api = {
   session: () => get<SessionInfo>('/auth/session'),
   directory: () => get<DirectoryEntry[]>('/auth/directory'),
   diagnostics: () => get<DiagnosticsReport>('/diagnostics'),
+  metadata: () => get<AppMetadata>('/metadata'),
 
   /* ---- data ---- */
   snapshot: () => get<Snapshot>('/snapshot'),

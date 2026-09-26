@@ -17,17 +17,8 @@ import {
 } from '../components/ui';
 import type { Adjustment, AdjustmentReason } from '../types';
 
-const REASONS: AdjustmentReason[] = [
-  'Damaged in Transit',
-  'Missing / Investigation',
-  'Incorrect Entry / Counting Error',
-  'Scrap / Wear & Tear',
-  'Supplier Surplus',
-  'Other',
-];
-
 export default function PhysicalCounts() {
-  const { snap, run, busy } = useApp();
+  const { snap, run, busy, metadata } = useApp();
   const user = useUser();
   const [approving, setApproving] = useState<Adjustment | null>(null);
   const [counted, setCounted] = useState('');
@@ -35,6 +26,7 @@ export default function PhysicalCounts() {
   const [memo, setMemo] = useState('');
 
   if (!snap) return null;
+  const reasons = metadata?.adjustmentReasons ?? [];
 
   const open = approving;
   const impact = open ? (Number(counted || 0) - open.recorded) * (snap.products.find((p) => p.sku === open.sku)?.unitCost ?? 0) : 0;
@@ -182,7 +174,7 @@ export default function PhysicalCounts() {
           <Card className="p-4">
             <SectionTitle icon="menu_book">Reasons</SectionTitle>
             <ul className="space-y-1.5">
-              {REASONS.map((r) => (
+              {reasons.map((r) => (
                 <li key={r} className="flex items-center justify-between gap-2 text-[12px]">
                   <span className="text-on-surface/70">{r}</span>
                   <span className="tnum font-mono text-[11px] text-outline">
@@ -291,7 +283,7 @@ export default function PhysicalCounts() {
                 onChange={(e) => setReason(e.target.value as AdjustmentReason)}
                 className="field"
               >
-                {REASONS.map((r) => (
+                {reasons.map((r) => (
                   <option key={r}>{r}</option>
                 ))}
               </select>

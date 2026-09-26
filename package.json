@@ -21,7 +21,8 @@
     "browser": "node scripts/browser-check.mjs",
     "verify": "npm run typecheck && npm run smoke && npm run browser",
     "reset": "node node_modules/tsx/dist/cli.mjs server/scripts/reset.ts",
-    "mongo:check": "node node_modules/tsx/dist/cli.mjs server/scripts/mongo-check.ts"
+    "mongo:check": "node node_modules/tsx/dist/cli.mjs server/scripts/mongo-check.ts",
+    "mongo:inspect": "node node_modules/tsx/dist/cli.mjs server/scripts/mongo-inspect.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

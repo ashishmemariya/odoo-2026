@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api, ApiError, readToken, writeToken } from './api';
-import type { Permission, SessionInfo, Snapshot, User } from './types';
+import type { AppMetadata, Permission, SessionInfo, Snapshot, User } from './types';
 
 export interface Toast {
   id: number;
@@ -21,6 +21,7 @@ export interface Toast {
 
 interface AppState {
   snap: Snapshot | null;
+  metadata: AppMetadata | null;
   user: User | null;
   permissions: Permission[];
   loading: boolean;
@@ -41,6 +42,7 @@ const Ctx = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [metadata, setMetadata] = useState<AppMetadata | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    void api.metadata().then(setMetadata).catch(() => undefined);
     if (!readToken()) {
       setRestoring(false);
       setLoading(false);
@@ -183,6 +186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppState>(
     () => ({
       snap,
+      metadata,
       user,
       permissions,
       loading,
@@ -197,7 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notify,
       dismiss,
     }),
-    [snap, user, permissions, loading, restoring, busy, toasts, can, signIn, signOut, refresh, run, notify, dismiss],
+    [snap, metadata, user, permissions, loading, restoring, busy, toasts, can, signIn, signOut, refresh, run, notify, dismiss],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

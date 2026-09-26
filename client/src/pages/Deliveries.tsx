@@ -17,24 +17,26 @@ import {
 import type { Delivery, DocColumn } from '../types';
 import { docMatchesColumn } from '../types';
 
-const COLUMNS: DocColumn[] = [
-  { key: 'Draft', label: 'Draft', icon: 'edit_note' },
-  { key: 'Waiting', label: 'Waiting', icon: 'hourglass_top' },
-  { key: 'Ready', label: 'Ready', icon: 'inventory' },
-  { key: 'Picking', label: 'Picking', icon: 'shopping_cart' },
-  { key: 'Packed', label: 'Packed', icon: 'package_2' },
-  { key: 'Done', label: 'Completed', icon: 'task_alt' },
-];
-
-/** Board columns are the flow; the Overdue lane is a derived attention filter. */
-const CHIPS = ['All', ...COLUMNS.map((c) => c.key), 'Overdue'];
+const COLUMN_META: Record<string, { label: string; icon: string }> = {
+  Draft: { label: 'Draft', icon: 'edit_note' },
+  Waiting: { label: 'Waiting', icon: 'hourglass_top' },
+  Ready: { label: 'Ready', icon: 'inventory' },
+  Picking: { label: 'Picking', icon: 'shopping_cart' },
+  Packed: { label: 'Packed', icon: 'package_2' },
+  Done: { label: 'Completed', icon: 'task_alt' },
+};
 
 export default function Deliveries() {
-  const { snap } = useApp();
+  const { snap, metadata } = useApp();
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [status, setStatus] = useState('All');
 
   if (!snap) return null;
+  const columns: DocColumn[] = (metadata?.statusFlows.delivery ?? []).map((key) => ({
+    key,
+    ...(COLUMN_META[key] ?? { label: key, icon: 'task_alt' }),
+  }));
+  const chips = ['All', ...columns.map((c) => c.key), 'Overdue'];
 
   const rows = status === 'All' ? snap.deliveries : snap.deliveries.filter((d) => d.status === status);
 
@@ -59,13 +61,13 @@ export default function Deliveries() {
       <div className="card mb-4 flex flex-wrap items-end gap-3 p-3">
         <Field label="Status" className="min-w-44">
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="field">
-            {CHIPS.map((s) => (
+            {chips.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
         </Field>
         <div className="flex flex-wrap gap-4 border-l border-outline-variant pl-4 text-[11.5px]">
-          {COLUMNS.map((c) => {
+          {columns.map((c) => {
             const n = snap.deliveries.filter((d) => docMatchesColumn(d, c.key)).length;
             return (
               <span key={c.key} className="text-on-surface/55">
@@ -136,7 +138,7 @@ export default function Deliveries() {
         </Card>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {COLUMNS.map((col) => {
+          {columns.map((col) => {
             const items = rows.filter((d) => docMatchesColumn(d, col.key));
             return (
               <div key={col.key} className="flex min-h-40 flex-col rounded-xl border border-outline-variant bg-surface-low p-2">

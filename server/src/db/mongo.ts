@@ -120,8 +120,9 @@ function seedSignature(): string {
 async function ensureIndexes(d: Db): Promise<void> {
   await Promise.all([
     d.collection('products').createIndex({ sku: 1 }, { unique: true }),
-    d.collection('locations').createIndex({ id: 1 }, { unique: true }),
+    d.collection('locations').createIndex({ code: 1 }, { unique: true }),
     d.collection('users').createIndex({ email: 1 }, { unique: true }),
+    d.collection('users').createIndex({ id: 1 }),
     d.collection('ledger').createIndex({ id: 1 }, { unique: true }),
     // FIFO consumption and the per-SKU rollup both walk the ledger by sku+time.
     d.collection('ledger').createIndex({ sku: 1, at: 1 }),

@@ -252,6 +252,17 @@ export interface DirectoryEntry {
   initials: string;
 }
 
+export interface AppMetadata {
+  adjustmentReasons: AdjustmentReason[];
+  statusFlows: {
+    receipt: string[];
+    delivery: string[];
+    transfer: string[];
+    adjustment: string[];
+  };
+  loginHighlights: { title: string; body: string }[];
+}
+
 export type Permission =
   | 'product.view'
   | 'product.manage'

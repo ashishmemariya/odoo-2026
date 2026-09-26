@@ -51,6 +51,30 @@ api.get('/health', (_req, res) =>
   res.json({ ok: true, backend: backendName(), ts: new Date().toISOString() }),
 );
 
+api.get('/metadata', (_req, res) =>
+  res.json({
+    adjustmentReasons: [
+      'Damaged in Transit',
+      'Missing / Investigation',
+      'Incorrect Entry / Counting Error',
+      'Scrap / Wear & Tear',
+      'Supplier Surplus',
+      'Other',
+    ],
+    statusFlows: {
+      receipt: RECEIPT_FLOW,
+      delivery: DELIVERY_FLOW,
+      transfer: TRANSFER_FLOW,
+      adjustment: ADJUSTMENT_FLOW,
+    },
+    loginHighlights: [
+      { title: 'Every movement is auditable', body: 'Receipts, transfers, deliveries and count variances all land in one append-only ledger.' },
+      { title: 'One number, everywhere', body: 'Stock, value and low-stock counts are derived from the same ledger, so pages can never disagree.' },
+      { title: 'Roles that mean something', body: 'Warehouse staff, supervisors, managers and admins each get their own actions and screens.' },
+    ],
+  }),
+);
+
 api.get('/snapshot', (req, res) => {
   const { credentials, ...safe } = getDb();
   const now = Date.now();
