@@ -1,21 +1,18 @@
 /** Shared domain model for StockSense ERP. Mirrors the wireframe source-of-truth. */
 
 export type LocationCode =
-  | 'WH/Stock1'
-  | 'WH/Stock1/Heavy-Rack-01'
-  | 'WH/Stock1/Bay04'
-  | 'WH/Stock2'
-  | 'WH/Stock2/RackB'
-  | 'WH/Production'
-  | 'WH/Rack-A'
+  | 'WH/Stock'
+  | 'WH/Stock/Heavy-Rack-01'
+  | 'WH/Stock/Bay-04'
+  | 'WH-Rack-A'
   | 'WH/Input'
-  | 'WH/Input/Dock-02N'
-  | 'WH/Output/Dock-01'
-  | 'WH/Cold-Zone'
-  | 'WH/Cold/Vault-L1'
-  | 'WH/Quarantine-Zone';
+  | 'WH/Output'
+  | 'WH-Production'
+  | 'WH-Cold-Zone'
+  | 'WH/Quarantine'
+  | (string & {});
 
-export type Unit = 'kg' | 'Units' | 'Rolls' | 'spools' | 'packs';
+export type Unit = 'kg' | 'Units' | 'Rolls';
 
 export type ProductStatus = 'IN_STOCK' | 'LOW' | 'OUT';
 
@@ -30,12 +27,25 @@ export interface Product {
   reorderPoint: number;
   /** qty committed to open outbound orders (soft reservation) */
   reserved: number;
-  /** physical on-hand, keyed by location code */
+  /** physical on-hand, keyed by location code. DERIVED from the ledger, never hand-edited. */
   stock: Record<string, number>;
   icon: string;
 }
 
-export type DocStatus = 'Draft' | 'Waiting' | 'Ready' | 'Packed' | 'Done' | 'Overdue' | 'Canceled';
+/**
+ * The union of every document status. `Overdue` is intentionally absent — a late
+ * document stays in its own step and raises a derived attention flag instead.
+ * See `status.ts` for the per-kind flows and the transition rules.
+ */
+export type DocStatus =
+  | 'Draft'
+  | 'Waiting'
+  | 'Ready'
+  | 'Picking'
+  | 'Packed'
+  | 'In Transit'
+  | 'Done'
+  | 'Canceled';
 
 export interface ReceiptLine {
   sku: string;
@@ -96,7 +106,10 @@ export interface Transfer {
   qty: number;
   requestedBy: string;
   status: DocStatus;
+  /** planned move window; a transfer that slips raises a derived Overdue flag */
+  scheduledDate: string;
   createdAt: string;
+  postedAt?: string;
 }
 
 export type AdjustmentReason =
@@ -107,7 +120,7 @@ export type AdjustmentReason =
   | 'Supplier Surplus'
   | 'Other';
 
-export type AdjustmentState = 'Pending Approval' | 'Reconciled' | 'Posted';
+export type AdjustmentState = 'Draft' | 'Pending Approval' | 'Approved' | 'Posted' | 'Canceled';
 
 export interface Adjustment {
   ref: string;
@@ -119,13 +132,26 @@ export interface Adjustment {
   reason: AdjustmentReason;
   memo: string;
   auditor: string;
+  /** who signed the variance off; must differ from `auditor` */
+  approvedBy?: string;
+  approvedAt?: string;
   state: AdjustmentState;
   valuationImpact: number;
   createdAt: string;
   postedAt?: string;
 }
 
-export type LedgerType = 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ADJUSTMENT';
+/**
+ * `OPENING` is the seeded baseline and `REVERSAL` unwinds a previously posted
+ * document. Both exist so that no ledger row ever has to be deleted or edited.
+ */
+export type LedgerType =
+  | 'OPENING'
+  | 'RECEIPT'
+  | 'DELIVERY'
+  | 'TRANSFER'
+  | 'ADJUSTMENT'
+  | 'REVERSAL';
 
 export interface LedgerEntry {
   id: string;
@@ -220,6 +246,7 @@ export type Permission =
   | 'adjustment.view'
   | 'adjustment.create'
   | 'adjustment.approve'
+  | 'adjustment.post'
   | 'count.view'
   | 'count.create'
   | 'count.approve'

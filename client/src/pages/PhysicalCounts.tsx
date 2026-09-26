@@ -17,17 +17,8 @@ import {
 } from '../components/ui';
 import type { Adjustment, AdjustmentReason } from '../types';
 
-const REASONS: AdjustmentReason[] = [
-  'Damaged in Transit',
-  'Missing / Investigation',
-  'Incorrect Entry / Counting Error',
-  'Scrap / Wear & Tear',
-  'Supplier Surplus',
-  'Other',
-];
-
 export default function PhysicalCounts() {
-  const { snap, run, busy } = useApp();
+  const { snap, run, busy, metadata, can } = useApp();
   const user = useUser();
   const [approving, setApproving] = useState<Adjustment | null>(null);
   const [counted, setCounted] = useState('');
@@ -35,6 +26,7 @@ export default function PhysicalCounts() {
   const [memo, setMemo] = useState('');
 
   if (!snap) return null;
+  const reasons = metadata?.adjustmentReasons ?? [];
 
   const open = approving;
   const impact = open ? (Number(counted || 0) - open.recorded) * (snap.products.find((p) => p.sku === open.sku)?.unitCost ?? 0) : 0;
@@ -62,7 +54,7 @@ export default function PhysicalCounts() {
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         {[
           { label: 'Pending approval', value: snap.adjustments.filter((a) => a.state === 'Pending Approval').length, icon: 'pending_actions', tone: 'text-warning' },
-          { label: 'Reconciled, not posted', value: snap.adjustments.filter((a) => a.state === 'Reconciled').length, icon: 'rule', tone: 'text-tertiary' },
+          { label: 'Approved, not posted', value: snap.adjustments.filter((a) => a.state === 'Approved').length, icon: 'rule', tone: 'text-tertiary' },
           { label: 'Posted to ledger', value: snap.adjustments.filter((a) => a.state === 'Posted').length, icon: 'task_alt', tone: 'text-success' },
         ].map((k) => (
           <Card key={k.label} className="flex items-center gap-3 p-3.5">
@@ -131,11 +123,33 @@ export default function PhysicalCounts() {
                         </div>
                       </td>
                       <td className="td text-right">
-                        {a.state !== 'Posted' ? (
-                          <button className="btn btn-primary !px-2.5 !py-1" onClick={() => startApproval(a)}>
-                            <Icon name="approval" size={14} /> Approve
+                      {a.state === 'Pending Approval' ? (
+                        can('adjustment.approve') ? (
+                          <button
+                            className="btn btn-primary !px-2.5 !py-1"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(
+                                'Sign off the variance',
+                                () => api.approveAdjustment(a.ref),
+                                { success: `${a.ref} signed off — ready for the ledger` },
+                              )
+                            }
+                          >
+                            <Icon name="approval" size={14} /> Sign off
                           </button>
                         ) : (
+                          <span className="text-[11.5px] text-on-surface/55">Awaiting sign-off</span>
+                        )
+                      ) : a.state === 'Approved' ? (
+                        can('adjustment.post') ? (
+                          <button className="btn btn-teal !px-2.5 !py-1" onClick={() => startApproval(a)}>
+                            <Icon name="publish" size={14} /> Post to ledger
+                          </button>
+                        ) : (
+                          <span className="text-[11.5px] text-on-surface/55">Ready to post</span>
+                        )
+                      ) : (
                           <Link
                             to={`/products/${a.sku}`}
                             className="btn btn-outline !px-2 !py-1"
@@ -182,7 +196,7 @@ export default function PhysicalCounts() {
           <Card className="p-4">
             <SectionTitle icon="menu_book">Reasons</SectionTitle>
             <ul className="space-y-1.5">
-              {REASONS.map((r) => (
+              {reasons.map((r) => (
                 <li key={r} className="flex items-center justify-between gap-2 text-[12px]">
                   <span className="text-on-surface/70">{r}</span>
                   <span className="tnum font-mono text-[11px] text-outline">
@@ -291,7 +305,7 @@ export default function PhysicalCounts() {
                 onChange={(e) => setReason(e.target.value as AdjustmentReason)}
                 className="field"
               >
-                {REASONS.map((r) => (
+                {reasons.map((r) => (
                   <option key={r}>{r}</option>
                 ))}
               </select>

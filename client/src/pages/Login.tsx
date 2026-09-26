@@ -6,23 +6,8 @@ import type { DirectoryEntry } from '../types';
 const DEMO_EMAIL = 'demo@stocksense.app';
 const DEMO_PASSWORD = 'Demo@1234';
 
-const HIGHLIGHTS = [
-  {
-    title: 'Every movement is auditable',
-    body: 'Receipts, transfers, deliveries and count variances all land in one append-only ledger.',
-  },
-  {
-    title: 'One number, everywhere',
-    body: 'Stock, value and low-stock counts are derived from the same ledger, so pages can never disagree.',
-  },
-  {
-    title: 'Roles that mean something',
-    body: 'Warehouse staff, supervisors, managers and admins each get their own actions and screens.',
-  },
-];
-
 export default function Login() {
-  const { signIn, notify } = useApp();
+  const { signIn, notify, metadata } = useApp();
   const [email, setEmail] = useState(DEMO_EMAIL);
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [error, setError] = useState('');
@@ -98,7 +83,7 @@ export default function Login() {
             on a single reconciled ledger across every warehouse.
           </p>
           <ul className="grid gap-3">
-            {HIGHLIGHTS.map((h) => (
+            {(metadata?.loginHighlights ?? []).map((h) => (
               <li key={h.title} className="rounded-card border border-outline-variant bg-surface-low p-4">
                 <div className="text-xs font-bold">{h.title}</div>
                 <div className="text-xs text-outline mt-1 leading-relaxed">{h.body}</div>

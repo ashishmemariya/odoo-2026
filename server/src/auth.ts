@@ -1,13 +1,14 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import type { AuthSession, Permission, Role, User } from './types.js';
 import { getDb } from './store.js';
 import { HttpError } from './engine.js';
+import { hashPassword, verifyPassword } from './password.js';
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
-const SCRYPT_KEYLEN = 64;
 
 export { SESSION_TTL_MS };
+export { hashPassword, verifyPassword };
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -17,24 +18,6 @@ declare global {
       user?: User;
     }
   }
-}
-
-/* ------------------------------------------------------------------ *
- * Password hashing (scrypt, per-user salt, constant-time comparison)
- * ------------------------------------------------------------------ */
-
-export function hashPassword(password: string, salt?: string): { salt: string; hash: string } {
-  const useSalt = salt ?? randomBytes(16).toString('hex');
-  const hash = scryptSync(password, useSalt, SCRYPT_KEYLEN).toString('hex');
-  return { salt: useSalt, hash };
-}
-
-export function verifyPassword(password: string, salt: string, expectedHex: string): boolean {
-  const { hash } = hashPassword(password, salt);
-  const a = Buffer.from(hash, 'hex');
-  const b = Buffer.from(expectedHex, 'hex');
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
 }
 
 /* ------------------------------------------------------------------ *
@@ -65,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'transfer.post',
     'adjustment.create',
     'adjustment.approve',
+    'adjustment.post',
     'count.create',
     'count.approve',
     'ledger.export',

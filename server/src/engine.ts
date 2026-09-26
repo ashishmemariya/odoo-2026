@@ -1,4 +1,5 @@
 import { getDb, commit, nextLedgerId, nowStamp } from './store.js';
+import { documentAttention } from './status.js';
 import type {
   Adjustment,
   Delivery,
@@ -13,8 +14,8 @@ import type {
  * Location hierarchy
  *
  * Balances are stored per *leaf* bin, but operations reference any node.
- * `WH/Stock1` is a container over `WH/Stock1/Heavy-Rack-01` and
- * `WH/Stock1/Bay04`, so reading a container must roll up its children.
+ * `WH/Stock` is a container over `WH/Stock/Heavy-Rack-01` and
+ * `WH/Stock/Bay-04`, so reading a container must roll up its children.
  * ------------------------------------------------------------------ */
 
 /** All storage keys that physically sit inside `code` (itself + descendants). */
@@ -60,7 +61,10 @@ export function drainFifo(
     if (want <= 0) break;
     const take = Math.min(p.stock[loc] ?? 0, want);
     if (take <= 0) continue;
-    p.stock[loc] = (p.stock[loc] ?? 0) - take;
+    const left = (p.stock[loc] ?? 0) - take;
+    // Drop emptied bins so a product's map only ever lists locations that hold stock.
+    if (left === 0) delete p.stock[loc];
+    else p.stock[loc] = left;
     taken[loc] = (taken[loc] ?? 0) + take;
     want -= take;
   }
@@ -391,6 +395,32 @@ export function postTransfer(ref: string, user: string): { doc: Transfer; entry:
  * Physical count reconciliation
  * ------------------------------------------------------------------ */
 
+/**
+ * Second pair of eyes. An adjustment only becomes postable once a different
+ * person has signed off the variance — the count and the approval are kept
+ * apart on purpose.
+ */
+export function approveAdjustment(input: { ref: string; user: string }): Adjustment {
+  const db = getDb();
+  const doc = db.adjustments.find((a) => a.ref === input.ref);
+  if (!doc) throw new HttpError(404, `Adjustment ${input.ref} not found`);
+  if (doc.state === 'Posted') throw new HttpError(409, `${input.ref} is already posted to the ledger`);
+  if (doc.state === 'Approved') return doc;
+  if (doc.state !== 'Pending Approval') {
+    throw new HttpError(409, `${input.ref} is ${doc.state.toLowerCase()} — only a count awaiting approval can be signed off.`);
+  }
+  if (doc.auditor && doc.auditor === input.user) {
+    throw new HttpError(
+      403,
+      `${input.ref} was counted by ${doc.auditor} — a second person must approve it.`,
+    );
+  }
+  doc.state = 'Approved';
+  doc.approvedBy = input.user;
+  doc.approvedAt = nowStamp();
+  commit();
+  return doc;
+}
 export function postAdjustment(
   input: {
     ref: string;
@@ -404,6 +434,14 @@ export function postAdjustment(
   const doc = db.adjustments.find((a) => a.ref === input.ref);
   if (!doc) throw new HttpError(404, `Adjustment ${input.ref} not found`);
   if (doc.state === 'Posted') throw new HttpError(409, `${input.ref} already posted to ledger`);
+  // Nothing reaches the ledger on a count alone: a second pair of eyes must
+  // sign the variance off first.
+  if (doc.state !== 'Approved') {
+    throw new HttpError(
+      409,
+      `${input.ref} is ${doc.state.toLowerCase()} — get it approved before posting to the ledger.`,
+    );
+  }
 
   const p = findProduct(doc.sku);
   if (!p) throw new HttpError(404, `SKU ${doc.sku} not found`);
@@ -453,6 +491,62 @@ export function requiresDualSignoff(a: Adjustment): boolean {
 }
 
 /* ------------------------------------------------------------------ *
+ * Reversals
+ *
+ * The ledger is append-only, so unwinding a posted document writes a
+ * counter-moving REVERSAL row instead of editing or deleting the original.
+ * That keeps "the ledger explains every balance" true even after a rewind.
+ * ------------------------------------------------------------------ */
+
+export interface ReversalLeg {
+  sku: string;
+  location: string;
+  /** signed change to apply at `location` */
+  delta: number;
+  /** the document row being counter-moved */
+  reverses: string;
+  note: string;
+}
+
+export function postReversal(legs: ReversalLeg[], user: string): LedgerEntry[] {
+  const db = getDb();
+  const entries: LedgerEntry[] = [];
+
+  for (const leg of legs) {
+    const p = findProduct(leg.sku);
+    if (!p) continue;
+
+    const current = p.stock[leg.location] ?? 0;
+    if (current + leg.delta < 0) {
+      throw new HttpError(
+        422,
+        `Cannot reverse ${leg.reverses}: ${leg.sku} holds only ${current} ${p.unit} at ${leg.location}`,
+      );
+    }
+
+    const next = current + leg.delta;
+    if (next === 0) delete p.stock[leg.location];
+    else p.stock[leg.location] = next;
+
+    entries.push(
+      postLedger({
+        type: 'REVERSAL',
+        ref: leg.reverses,
+        sku: leg.sku,
+        delta: leg.delta,
+        from: leg.delta < 0 ? leg.location : 'Reversal',
+        to: leg.delta < 0 ? 'Reversal' : leg.location,
+        user,
+        note: leg.note,
+      }),
+    );
+  }
+
+  commit();
+  return entries;
+}
+
+/* ------------------------------------------------------------------ *
  * Dashboard rollup
  * ------------------------------------------------------------------ */
 
@@ -463,6 +557,11 @@ export function dashboardSummary() {
   const reserved = db.products.reduce((a, p) => a + p.reserved, 0);
   const valuation = db.products.reduce((a, p) => a + totalStock(p) * p.unitCost, 0);
   const lowStock = db.products.filter((p) => productStatus(p) !== 'IN_STOCK');
+
+  const now = Date.now();
+  const lateReceipts = db.receipts.filter((r) => documentAttention(r, now)?.kind === 'Overdue');
+  const lateDeliveries = db.deliveries.filter((d) => documentAttention(d, now)?.kind === 'Overdue');
+  const lateTransfers = db.transfers.filter((t) => documentAttention(t, now)?.kind === 'Overdue');
 
   return {
     catalogSkus: db.products.length,
@@ -476,8 +575,13 @@ export function dashboardSummary() {
     waitingDeliveries: db.deliveries.filter((d) => d.status === 'Waiting').length,
     readyDeliveries: db.deliveries.filter((d) => d.status === 'Ready').length,
     doneDeliveries: db.deliveries.filter((d) => d.status === 'Done').length,
-    overdueDeliveries: db.deliveries.filter((d) => d.status === 'Overdue').length,
-    lateReceipts: db.receipts.filter((r) => r.status === 'Overdue').length,
+    /** Derived, never a stored status: these are documents past their slot. */
+    lateDeliveries: lateDeliveries.length,
+    /** legacy alias kept for the dashboard KPI copy */
+    overdueDeliveries: lateDeliveries.length,
+    lateReceipts: lateReceipts.length,
+    lateTransfers: lateTransfers.length,
+    overdueCount: lateReceipts.length + lateDeliveries.length + lateTransfers.length,
     scheduledTransfers: db.transfers.filter((t) => t.status !== 'Done').length,
     pendingAdjustments: db.adjustments.filter((a) => a.state === 'Pending Approval').length,
     ledgerEntries: db.ledger.length,

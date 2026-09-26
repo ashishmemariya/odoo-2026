@@ -43,8 +43,6 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ];
 
-const MOBILE_NAV = NAV.flatMap((g) => g.items);
-
 export function SideNav() {
   const { snap, user, can } = useApp();
   const loc = useLocation();
@@ -136,16 +134,17 @@ export function SideNav() {
 
 export function MobileNav() {
   const loc = useLocation();
+  const { can } = useApp();
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-outline-variant bg-surface-lowest px-2 py-1.5 lg:hidden">
-      {MOBILE_NAV.map((item) => {
+      {NAV.flatMap((g) => g.items).filter((item) => !item.requires || can(item.requires)).map((item) => {
         const on = item.to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(item.to);
         return (
           <NavLink
             key={item.to}
             to={item.to}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold ${
-              on ? 'bg-primary-container/12 text-primary' : 'text-on-surface/60'
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-control px-2.5 py-1.5 text-[12px] font-semibold ${
+              on ? 'bg-accent text-primary' : 'text-outline'
             }`}
           >
             <Icon name={item.icon} size={16} fill={on} />
@@ -213,7 +212,17 @@ export function TopNav() {
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-2">
+        <div
+          className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
+          title={snap?.backend === 'mongodb' ? 'Connected to MongoDB Atlas cluster' : 'Connected to datastore'}
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>{snap?.backend === 'mongodb' ? 'MongoDB Atlas' : 'Database Active'}</span>
+        </div>
         <button
           className="btn btn-outline !px-2.5"
           onClick={() => void refresh()}

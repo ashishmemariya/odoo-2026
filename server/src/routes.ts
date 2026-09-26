@@ -1,21 +1,33 @@
 import { Router } from 'express';
-import { getDb, commit, resetDb } from './store.js';
+import { getDb, commit, resetDb, nowStamp, backendName, nextReceiptRef, nextDeliveryRef } from './store.js';
 import {
   HttpError,
   checkDelivery,
   dashboardSummary,
   findProduct,
   freeToUse,
+  approveAdjustment,
   postAdjustment,
   postDelivery,
   postReceipt,
   postTransfer,
+  postLedger,
   productStatus,
   requiresDualSignoff,
   stockAt,
   totalStock,
 } from './engine.js';
-import { runScenarioStep, scenarioState } from './scenario.js';
+import {
+  ADJUSTMENT_FLOW,
+  DELIVERY_FLOW,
+  RECEIPT_FLOW,
+  TRANSFER_FLOW,
+  adjustmentView,
+  deliveryView,
+  receiptView,
+  transferView,
+} from './status.js';
+import { runScenarioStep, scenarioState, startDrill } from './scenario.js';
 import {
   SESSION_TTL_MS,
   activeSessionCount,
@@ -27,7 +39,7 @@ import {
   requireAuth,
   requirePermission,
 } from './auth.js';
-import type { Product, User } from './types.js';
+import type { Delivery, DeliveryLine, Product, Receipt, ReceiptLine, StorageLocation, Unit, User, Warehouse } from './types.js';
 
 export const api = Router();
 
@@ -37,13 +49,46 @@ api.use(attachUser);
 
 /* ---------------------------- meta ---------------------------- */
 
-api.get('/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+api.get('/health', (_req, res) =>
+  res.json({ ok: true, backend: backendName(), ts: new Date().toISOString() }),
+);
+
+api.get('/metadata', (_req, res) =>
+  res.json({
+    adjustmentReasons: [
+      'Damaged in Transit',
+      'Missing / Investigation',
+      'Incorrect Entry / Counting Error',
+      'Scrap / Wear & Tear',
+      'Supplier Surplus',
+      'Other',
+    ],
+    statusFlows: {
+      receipt: RECEIPT_FLOW,
+      delivery: DELIVERY_FLOW,
+      transfer: TRANSFER_FLOW,
+      adjustment: ADJUSTMENT_FLOW,
+    },
+    loginHighlights: [
+      { title: 'Every movement is auditable', body: 'Receipts, transfers, deliveries and count variances all land in one append-only ledger.' },
+      { title: 'One number, everywhere', body: 'Stock, value and low-stock counts are derived from the same ledger, so pages can never disagree.' },
+      { title: 'Roles that mean something', body: 'Warehouse staff, supervisors, managers and admins each get their own actions and screens.' },
+    ],
+  }),
+);
 
 api.get('/snapshot', (req, res) => {
   const { credentials, ...safe } = getDb();
+  const now = Date.now();
   res.json({
+    backend: backendName(),
     ...safe,
     products: safe.products.map(productView),
+    // documents carry the derived attention flag + step position
+    receipts: safe.receipts.map((r) => receiptView(r, now)),
+    deliveries: safe.deliveries.map((d) => deliveryView(d, now)),
+    transfers: safe.transfers.map((t) => transferView(t, now)),
+    adjustments: safe.adjustments.map((a) => adjustmentView(a, now)),
     dashboard: dashboardSummary(),
     scenario: scenarioState(),
     me: req.user ? { user: req.user, permissions: permissionsFor(req.user.role) } : null,
@@ -199,21 +244,81 @@ api.get('/categories', (_req, res) => {
   res.json(['All', ...set]);
 });
 
+api.post('/products', requirePermission('product.manage'), (req, res) => {
+  const { name, sku, category, unit, unitCost, reorderPoint, initialLocation, initialQty, icon } = req.body ?? {};
+  const db = getDb();
+  const cleanSku = String(sku ?? '').trim().toUpperCase();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanSku) throw new HttpError(400, 'SKU is required');
+  if (!cleanName) throw new HttpError(400, 'Product name is required');
+  if (findProduct(cleanSku)) throw new HttpError(409, `Product with SKU ${cleanSku} already exists`);
+
+  const cost = Number(unitCost ?? 0);
+  const reorder = Number(reorderPoint ?? 10);
+  const u: Unit = (['kg', 'Units', 'Rolls'] as Unit[]).includes(unit) ? unit : 'Units';
+  const initQty = Number(initialQty ?? 0);
+  const loc = String(initialLocation ?? '').trim();
+
+  const stock: Record<string, number> = {};
+  if (initQty > 0 && loc) {
+    stock[loc] = initQty;
+  }
+
+  const id = `P-${String(db.products.length + 1).padStart(4, '0')}`;
+  const newProduct: Product = {
+    id,
+    name: cleanName,
+    sku: cleanSku,
+    category: String(category ?? 'General').trim() || 'General',
+    unit: u,
+    unitCost: cost >= 0 ? cost : 0,
+    reorderPoint: reorder >= 0 ? reorder : 0,
+    reserved: 0,
+    stock,
+    icon: String(icon ?? 'inventory_2'),
+  };
+
+  db.products.push(newProduct);
+
+  if (initQty > 0 && loc) {
+    postLedger({
+      type: 'OPENING',
+      ref: 'INIT',
+      sku: cleanSku,
+      delta: initQty,
+      from: 'Initial Setup',
+      to: loc,
+      user: currentUser(req).name,
+      note: `Initial opening balance for new product ${cleanName}.`,
+    });
+  }
+
+  commit();
+  res.status(201).json(productView(newProduct));
+});
+
 /* ---------------------------- receipts ---------------------------- */
 
 api.get('/receipts', (req, res) => {
   const status = String(req.query.status ?? 'All');
   let list = getDb().receipts;
   if (status !== 'All') list = list.filter((r) => r.status === status);
-  res.json(list);
+  const now = Date.now();
+  // `?attention=Overdue` filters on the derived flag rather than a stored status.
+  if (String(req.query.attention ?? '') === 'Overdue') {
+    list = list.filter((r) => receiptView(r, now).attention?.kind === 'Overdue');
+  }
+  res.json(list.map((r) => receiptView(r, now)));
 });
 
-// `ref` travels as a query param because refs contain slashes (WH/IN/0001).
+// `ref` travels as a query param because refs contain slashes (RC-1001).
 api.get('/receipt', (req, res) => {
   const ref = String(req.query.ref ?? '');
   const doc = getDb().receipts.find((r) => r.ref === ref);
   if (!doc) throw new HttpError(404, `Receipt ${ref} not found`);
   res.json({
+    ...receiptView(doc),
+    flow: RECEIPT_FLOW,
     ...doc,
     lines: doc.items.map((l) => {
       const p = findProduct(l.sku);
@@ -236,13 +341,57 @@ api.post('/receipt/validate', requirePermission('receipt.post'), (req, res) => {
   res.json({ ok: true, receipt: doc, ledger: entries });
 });
 
+api.post('/receipts', requirePermission('receipt.create'), (req, res) => {
+  const { supplier, supplierTier, poRef, bolRef, destination, contact, scheduledDate, carrier, dockBay, items, notes } = req.body ?? {};
+  const db = getDb();
+  if (!supplier) throw new HttpError(400, 'Supplier is required');
+  if (!destination) throw new HttpError(400, 'Destination location is required');
+  if (!Array.isArray(items) || items.length === 0) throw new HttpError(400, 'At least one line item is required');
+
+  const ref = nextReceiptRef();
+  const receiptLines: ReceiptLine[] = items.map((it: any) => ({
+    sku: String(it.sku),
+    expected: Number(it.expected ?? it.qty ?? 0),
+    received: Number(it.received ?? it.expected ?? it.qty ?? 0),
+    bin: String(it.bin ?? destination),
+    lot: String(it.lot ?? 'LOT-2026'),
+    barcode: String(it.barcode ?? `${it.sku}-BAR`),
+  }));
+
+  const doc: Receipt = {
+    ref,
+    supplier: String(supplier).trim(),
+    supplierTier: supplierTier ?? 'Tier 1 Vendor',
+    poRef: poRef ? String(poRef).trim() : `PO-${ref.replace(/\D/g, '')}`,
+    bolRef: bolRef ? String(bolRef).trim() : `BOL-${ref.replace(/\D/g, '')}`,
+    destination,
+    contact: contact ? String(contact).trim() : 'Logistics Desk',
+    scheduledDate: scheduledDate ? String(scheduledDate).trim() : nowStamp().slice(0, 10),
+    carrier: carrier ? String(carrier).trim() : 'Standard Freight',
+    dockBay: dockBay ? String(dockBay).trim() : 'Bay-01',
+    status: 'Ready' as const,
+    items: receiptLines,
+    notes: notes ? String(notes).trim() : '',
+    createdAt: nowStamp(),
+    createdBy: currentUser(req).name,
+  };
+
+  db.receipts.unshift(doc);
+  commit();
+  res.status(201).json(receiptView(doc));
+});
+
 /* ---------------------------- deliveries ---------------------------- */
 
 api.get('/deliveries', (req, res) => {
   const status = String(req.query.status ?? 'All');
   let list = getDb().deliveries;
   if (status !== 'All') list = list.filter((d) => d.status === status);
-  res.json(list);
+  const now = Date.now();
+  if (String(req.query.attention ?? '') === 'Overdue') {
+    list = list.filter((d) => deliveryView(d, now).attention?.kind === 'Overdue');
+  }
+  res.json(list.map((d) => deliveryView(d, now)));
 });
 
 api.get('/delivery', (req, res) => {
@@ -251,7 +400,8 @@ api.get('/delivery', (req, res) => {
   if (!doc) throw new HttpError(404, `Delivery ${ref} not found`);
   const check = checkDelivery(doc.ref);
   res.json({
-    ...doc,
+    ...deliveryView(doc),
+    flow: DELIVERY_FLOW,
     check,
     lines: doc.items.map((l) => {
       const p = findProduct(l.sku);
@@ -280,9 +430,61 @@ api.post('/delivery/validate', requirePermission('delivery.post'), (req, res) =>
   res.json({ ok: true, delivery: doc, ledger: entries });
 });
 
+api.post('/deliveries', requirePermission('delivery.create'), (req, res) => {
+  const { to, contact, address, from, carrier, scheduledDate, items, notes, operationType } = req.body ?? {};
+  const db = getDb();
+  if (!to) throw new HttpError(400, 'Customer / Destination is required');
+  if (!from) throw new HttpError(400, 'Source location is required');
+  if (!Array.isArray(items) || items.length === 0) throw new HttpError(400, 'At least one line item is required');
+
+  const ref = nextDeliveryRef();
+  const deliveryLines: DeliveryLine[] = items.map((it: any) => ({
+    sku: String(it.sku),
+    qty: Number(it.qty ?? 0),
+    bin: String(it.bin ?? from),
+  }));
+
+  // Soft-reserve quantities
+  for (const line of deliveryLines) {
+    const p = findProduct(line.sku);
+    if (p) {
+      p.reserved = (p.reserved ?? 0) + line.qty;
+    }
+  }
+
+  const doc: Delivery = {
+    ref,
+    from,
+    to: String(to).trim(),
+    contact: contact ? String(contact).trim() : 'Dispatch Manager',
+    address: address ? String(address).trim() : 'Client Delivery Address',
+    scheduledDate: scheduledDate ? String(scheduledDate).trim() : nowStamp().slice(0, 10),
+    carrier: carrier ? String(carrier).trim() : 'Express Delivery',
+    status: 'Ready' as const,
+    operationType: operationType ? String(operationType).trim() : 'Standard Delivery',
+    items: deliveryLines,
+    notes: notes ? String(notes).trim() : '',
+    createdAt: nowStamp(),
+    createdBy: currentUser(req).name,
+  };
+
+  db.deliveries.unshift(doc);
+  commit();
+  res.status(201).json(deliveryView(doc));
+});
+
 /* ---------------------------- transfers ---------------------------- */
 
-api.get('/transfers', (_req, res) => res.json(getDb().transfers));
+api.get('/transfers', (req, res) => {
+  const now = Date.now();
+  let list = getDb().transfers;
+  const status = String(req.query.status ?? 'All');
+  if (status !== 'All') list = list.filter((t) => t.status === status);
+  if (String(req.query.attention ?? '') === 'Overdue') {
+    list = list.filter((t) => transferView(t, now).attention?.kind === 'Overdue');
+  }
+  res.json(list.map((t) => transferView(t, now)));
+});
 
 api.post('/transfers', requirePermission('transfer.create'), (req, res) => {
   const { from, to, sku, qty } = req.body ?? {};
@@ -303,7 +505,8 @@ api.post('/transfers', requirePermission('transfer.create'), (req, res) => {
     qty: amount,
     requestedBy: currentUser(req).name,
     status: 'Draft' as const,
-    createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    scheduledDate: nowStamp(),
+    createdAt: nowStamp(),
   };
   db.transfers.push(doc);
   commit();
@@ -317,9 +520,15 @@ api.post('/transfer/execute', requirePermission('transfer.post'), (req, res) => 
 
 /* ---------------------------- physical counts ---------------------------- */
 
-api.get('/adjustments', (_req, res) =>
-  res.json(getDb().adjustments.map((a) => ({ ...a, dualSignoff: requiresDualSignoff(a) }))),
-);
+api.get('/adjustments', (req, res) => {
+  const now = Date.now();
+  let list = getDb().adjustments;
+  const state = String(req.query.status ?? 'All');
+  if (state !== 'All') list = list.filter((a) => a.state === state);
+  res.json(
+    list.map((a) => ({ ...adjustmentView(a, now), dualSignoff: requiresDualSignoff(a) })),
+  );
+});
 
 api.post('/adjustments', requirePermission('adjustment.create'), (req, res) => {
   const { sku, location, recorded, counted, reason, memo } = req.body ?? {};
@@ -346,7 +555,15 @@ api.post('/adjustments', requirePermission('adjustment.create'), (req, res) => {
   res.json(doc);
 });
 
-api.post('/adjustment/post', requirePermission('adjustment.approve'), (req, res) => {
+api.post('/adjustment/approve', requirePermission('adjustment.approve'), (req, res) => {
+  const doc = approveAdjustment({
+    ref: String(req.query.ref ?? ''),
+    user: currentUser(req).name,
+  });
+  res.json({ ok: true, adjustment: adjustmentView(doc) });
+});
+
+api.post('/adjustment/post', requirePermission('adjustment.post'), (req, res) => {
   const { doc, entry } = postAdjustment({
     ref: String(req.query.ref ?? ''),
     counted: Number(req.body?.counted ?? 0),
@@ -372,7 +589,79 @@ api.get('/ledger', (req, res) => {
 
 api.get('/warehouses', (_req, res) => res.json(getDb().warehouses));
 
+api.post('/warehouses', requirePermission('settings.manage'), (req, res) => {
+  const { code, name, type, address, manager } = req.body ?? {};
+  const db = getDb();
+  const cleanCode = String(code ?? '').trim().toUpperCase();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanCode) throw new HttpError(400, 'Warehouse code is required');
+  if (!cleanName) throw new HttpError(400, 'Warehouse name is required');
+  if (db.warehouses.some((w) => w.code === cleanCode)) {
+    throw new HttpError(409, `Warehouse with code ${cleanCode} already exists`);
+  }
+
+  const newWh: Warehouse = {
+    code: cleanCode,
+    name: cleanName,
+    type: type ?? 'Main Fulfillment',
+    address: address ? String(address).trim() : '',
+    manager: manager ? String(manager).trim() : currentUser(req).name,
+    capacityUsedPct: 0,
+    locationCount: 0,
+  };
+
+  db.warehouses.push(newWh);
+  commit();
+  res.status(201).json(newWh);
+});
+
 api.get('/locations', (_req, res) => res.json(getDb().locations));
+
+api.post('/locations', requirePermission('settings.manage'), (req, res) => {
+  const { code, name, warehouse, parent, container, type, maxLoad } = req.body ?? {};
+  const db = getDb();
+  const cleanCode = String(code ?? '').trim();
+  const cleanName = String(name ?? '').trim();
+  if (!cleanCode) throw new HttpError(400, 'Location code is required');
+  if (!cleanName) throw new HttpError(400, 'Location name is required');
+  if (!warehouse) throw new HttpError(400, 'Warehouse is required');
+  if (db.locations.some((l) => l.code === cleanCode)) {
+    throw new HttpError(409, `Location with code ${cleanCode} already exists`);
+  }
+
+  const newLoc: StorageLocation = {
+    code: cleanCode,
+    name: cleanName,
+    shortCode: cleanCode.split('/').pop() ?? cleanCode,
+    warehouse: String(warehouse),
+    parent: parent ? String(parent) : undefined,
+    container: Boolean(container),
+    type: type ?? 'Internal Storage',
+    skuCount: 0,
+    maxLoad: maxLoad ? String(maxLoad) : '1,000 kg',
+    status: 'Active',
+  };
+
+  db.locations.push(newLoc);
+  const wh = db.warehouses.find((w) => w.code === warehouse);
+  if (wh) wh.locationCount = (wh.locationCount ?? 0) + 1;
+
+  commit();
+  res.status(201).json(newLoc);
+});
+
+/**
+ * The canonical lifecycles, so the client renders steppers and filter chips from
+ * the same definition the engine validates against.
+ */
+api.get('/status-flows', (_req, res) =>
+  res.json({
+    receipt: RECEIPT_FLOW,
+    delivery: DELIVERY_FLOW,
+    transfer: TRANSFER_FLOW,
+    adjustment: ADJUSTMENT_FLOW,
+  }),
+);
 
 /* ---------------------------- scenario ---------------------------- */
 
@@ -383,7 +672,17 @@ api.post('/scenario/run', requirePermission('transfer.post'), (req, res) => {
   res.json({ ...result, snapshot: { products: getDb().products.map((p) => ({ ...p, total: totalStock(p) })), ledger: getDb().ledger, dashboard: dashboardSummary() } });
 });
 
+/**
+ * Rewinds the drill to an empty rack so the four steps can be executed by hand.
+ * Writes counter-moving ledger rows rather than deleting any.
+ */
+api.post('/scenario/start-drill', requirePermission('demo.reset'), (req, res) => {
+  res.json(startDrill(currentUser(req).name));
+});
+
+/** Restores the canonical seeded system — the live state with 77 kg on hand. */
 api.post('/scenario/reset', requirePermission('demo.reset'), (_req, res) => {
+  // Seeded user IDs are stable across a reseed, so open sessions stay valid here too.
   resetDb();
   res.json(scenarioState());
 });

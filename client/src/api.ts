@@ -1,5 +1,6 @@
 import type {
   AdjustmentReason,
+  AppMetadata,
   Delivery,
   DiagnosticsReport,
   DirectoryEntry,
@@ -80,6 +81,7 @@ export const api = {
   session: () => get<SessionInfo>('/auth/session'),
   directory: () => get<DirectoryEntry[]>('/auth/directory'),
   diagnostics: () => get<DiagnosticsReport>('/diagnostics'),
+  metadata: () => get<AppMetadata>('/metadata'),
 
   /* ---- data ---- */
   snapshot: () => get<Snapshot>('/snapshot'),
@@ -89,10 +91,34 @@ export const api = {
   products: (f?: { q?: string; category?: string; status?: string }) =>
     get<Product[]>(`/products${q({ ...f })}`),
   product: (sku: string) => get<Product>(`/products/${encodeURIComponent(sku)}`),
+  createProduct: (body: {
+    name: string;
+    sku: string;
+    category?: string;
+    unit?: string;
+    unitCost?: number;
+    reorderPoint?: number;
+    initialLocation?: string;
+    initialQty?: number;
+    icon?: string;
+  }) => post<Product>('/products', body),
   categories: () => get<string[]>('/categories'),
 
   receipts: (status?: string) => get<Receipt[]>(`/receipts${q({ status })}`),
   receipt: (ref: string) => get<Receipt>(`/receipt${q({ ref })}`),
+  createReceipt: (body: {
+    supplier: string;
+    supplierTier?: string;
+    poRef?: string;
+    bolRef?: string;
+    destination: string;
+    contact?: string;
+    scheduledDate?: string;
+    carrier?: string;
+    dockBay?: string;
+    items: { sku: string; expected: number; received?: number; bin?: string; lot?: string; barcode?: string }[];
+    notes?: string;
+  }) => post<Receipt>('/receipts', body),
   // The server attributes the movement to the signed-in user; `user` is accepted
   // only so existing call sites keep compiling.
   validateReceipt: (ref: string, _user?: string) =>
@@ -100,6 +126,17 @@ export const api = {
 
   deliveries: (status?: string) => get<Delivery[]>(`/deliveries${q({ status })}`),
   delivery: (ref: string) => get<Delivery>(`/delivery${q({ ref })}`),
+  createDelivery: (body: {
+    to: string;
+    contact?: string;
+    address?: string;
+    from: string;
+    carrier?: string;
+    scheduledDate?: string;
+    operationType?: string;
+    items: { sku: string; qty: number; bin?: string }[];
+    notes?: string;
+  }) => post<Delivery>('/deliveries', body),
   validateDelivery: (ref: string, _user?: string) =>
     post<{ ok: true; delivery: Delivery }>(`/delivery/validate${q({ ref })}`),
 
@@ -118,6 +155,8 @@ export const api = {
     reason: string;
     memo: string;
   }) => post<Snapshot['adjustments'][number]>('/adjustments', body),
+  approveAdjustment: (ref: string) =>
+    post<{ ok: true; adjustment: Snapshot['adjustments'][number] }>(`/adjustment/approve${q({ ref })}`),
   postAdjustment: (body: {
     ref: string;
     counted: number;
@@ -128,11 +167,31 @@ export const api = {
   ledger: (f?: { type?: string; sku?: string }) => get<Snapshot['ledger']>(`/ledger${q({ ...f })}`),
 
   warehouses: () => get<Snapshot['warehouses']>('/warehouses'),
+  createWarehouse: (body: {
+    code: string;
+    name: string;
+    type?: string;
+    address?: string;
+    manager?: string;
+  }) => post<Snapshot['warehouses'][number]>('/warehouses', body),
   locations: () => get<StorageLocation[]>('/locations'),
+  createLocation: (body: {
+    code: string;
+    name: string;
+    warehouse: string;
+    parent?: string;
+    container?: boolean;
+    type?: string;
+    maxLoad?: string;
+  }) => post<StorageLocation>('/locations', body),
 
   settings: () => get<Snapshot['settings']>('/settings'),
   saveSettings: (body: Partial<Snapshot['settings']>) => patch<Snapshot['settings']>('/settings', body),
 
-  runScenario: (_user?: string) =>
-    post<{ action: string; message: string; ref: string }>('/scenario/run'),
-};
+    runScenario: () =>
+      post<{ action: string; message: string; ref: string }>('/scenario/run'),
+    startDrill: () =>
+      post<{ rewound: number; entries: number; balance: number; message: string }>(
+        '/scenario/start-drill',
+      ),
+  };
