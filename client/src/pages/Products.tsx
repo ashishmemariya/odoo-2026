@@ -16,7 +16,7 @@ import {
   SectionTitle,
   StatusBadge,
 } from '../components/ui';
-import type { Product } from '../types';
+import type { Product, Snapshot } from '../types';
 
 const STATUS_RING: Record<string, string> = {
   IN_STOCK: 'ring-success/25',
@@ -729,9 +729,18 @@ export function ProductDetail() {
           <Card className="p-4">
             <SectionTitle icon="edit_note">Post a physical count</SectionTitle>
             <div className="space-y-3">
+              <Field label="Count location">
+                <select value={activeLoc} onChange={(e) => setLoc(e.target.value)} className="field">
+                  {snap.locations.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.code} — {l.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Book qty">
-                  <input readOnly value={p.total} className="field tnum font-mono opacity-70" />
+                <Field label={`Book qty at ${activeLoc}`}>
+                  <input readOnly value={bookQty} className="field tnum font-mono opacity-70" />
                 </Field>
                 <Field label="Counted">
                   <input
@@ -746,7 +755,13 @@ export function ProductDetail() {
               </div>
               <div className="flex items-center justify-between rounded-lg border border-outline-variant bg-surface-low px-3 py-2">
                 <span className="text-[12px] font-semibold">Variance</span>
-                <Delta value={counted === '' ? 0 : Number(counted) - p.total} />
+                <span className="flex items-baseline gap-2">
+                  <Delta value={delta} />
+                  <span className="tnum text-[11px] text-on-surface/60">
+                    {snap.settings.currency}
+                    {(delta * p.unitCost).toLocaleString('en-IN')}
+                  </span>
+                </span>
               </div>
               {dualSignoff && (
                 <p className="flex items-start gap-1.5 rounded-lg border border-warning/40 bg-warning-container px-2.5 py-1.5 text-[11px] text-on-warning-container">
@@ -779,14 +794,14 @@ export function ProductDetail() {
                 className="btn btn-primary w-full justify-center"
                 disabled={busy || counted === ''}
                 onClick={() => {
-                  if (!loc || counted === '') return;
+                  if (counted === '') return;
                   void run(
                     `Count for ${p.sku}`,
                     async () => {
                       const created = await api.createCount({
                         sku: p.sku,
-                        location: loc,
-                        recorded: bookQtyIn(p, loc, snap),
+                        location: activeLoc,
+                        recorded: bookQty,
                         counted: Number(counted),
                         reason,
                         memo,

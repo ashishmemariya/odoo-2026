@@ -19,7 +19,7 @@
     "framer-motion": "^11.18.0",
     "lucide-react": "^1.48.0",
     "react": "^19.3.0",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.3.0",
     "react-hook-form": "^7.89.0",
     "react-hot-toast": "^2.6.1",
     "react-router-dom": "^7.18.4",
