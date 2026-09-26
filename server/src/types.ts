@@ -1,21 +1,17 @@
 /** Shared domain model for StockSense ERP. Mirrors the wireframe source-of-truth. */
 
 export type LocationCode =
-  | 'WH/Stock1'
-  | 'WH/Stock1/Heavy-Rack-01'
-  | 'WH/Stock1/Bay04'
-  | 'WH/Stock2'
-  | 'WH/Stock2/RackB'
-  | 'WH/Production'
-  | 'WH/Rack-A'
+  | 'WH/Stock'
+  | 'WH/Stock/Heavy-Rack-01'
+  | 'WH/Stock/Bay-04'
+  | 'WH-Rack-A'
   | 'WH/Input'
-  | 'WH/Input/Dock-02N'
-  | 'WH/Output/Dock-01'
-  | 'WH/Cold-Zone'
-  | 'WH/Cold/Vault-L1'
-  | 'WH/Quarantine-Zone';
+  | 'WH/Output'
+  | 'WH-Production'
+  | 'WH-Cold-Zone'
+  | 'WH/Quarantine';
 
-export type Unit = 'kg' | 'Units' | 'Rolls' | 'spools' | 'packs';
+export type Unit = 'kg' | 'Units' | 'Rolls';
 
 export type ProductStatus = 'IN_STOCK' | 'LOW' | 'OUT';
 
@@ -30,7 +26,7 @@ export interface Product {
   reorderPoint: number;
   /** qty committed to open outbound orders (soft reservation) */
   reserved: number;
-  /** physical on-hand, keyed by location code */
+  /** physical on-hand, keyed by location code. DERIVED from the ledger, never hand-edited. */
   stock: Record<string, number>;
   icon: string;
 }
@@ -125,7 +121,8 @@ export interface Adjustment {
   postedAt?: string;
 }
 
-export type LedgerType = 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ADJUSTMENT';
+/** `OPENING` is the seeded baseline; every later row is a real document event. */
+export type LedgerType = 'OPENING' | 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ADJUSTMENT';
 
 export interface LedgerEntry {
   id: string;

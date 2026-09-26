@@ -13,7 +13,8 @@ const CHROME =
   process.env.CHROME_PATH ??
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const BASE = process.env.WEB ?? 'http://localhost:5173';
-const PORT = 9222;
+// A fresh debugging port per run so back-to-back runs cannot collide.
+const PORT = 9300 + Math.floor(Math.random() * 400);
 
 let pass = 0;
 let fail = 0;
