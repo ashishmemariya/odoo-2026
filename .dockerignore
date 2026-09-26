@@ -1,0 +1,18 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+dist
+**/dist
+*.log
+server/data
+frontend/src_extracted
+frontend/src_industrial
+frontend/stitch_stocksense_inventory_management_system.zip
+stocksense-netlify-deploy
+stocksense-netlify-deploy-backup
+Screenshot *.png
+StockSense - 8 hours.png

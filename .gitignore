@@ -13,6 +13,10 @@ backend/.env
 
 # Production Build
 dist/
+server/data/
+server/.env
+server/.env.*
+!.env.example
 dist-ssr/
 build/
 
@@ -31,4 +35,3 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea
-server/data/
