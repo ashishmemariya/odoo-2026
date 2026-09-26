@@ -6,7 +6,8 @@
   "description": "StockSense ERP - Enterprise Logistics & Inventory (React + Express)",
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "frontend"
   ],
   "scripts": {
     "dev": "concurrently -n API,WEB -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
@@ -15,7 +16,10 @@
     "build": "npm run build --workspace client && npm run build --workspace server",
     "start": "npm run start --workspace server",
     "typecheck": "npm run typecheck --workspace client && npm run typecheck --workspace server",
-    "reset": "node server/scripts/reset-db.mjs"
+    "reset": "node server/scripts/reset-db.mjs",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build:frontend": "npm run build --workspace frontend",
+    "preview": "npm run preview --workspace frontend"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
