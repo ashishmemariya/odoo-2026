@@ -1,6 +1,6 @@
 import { MongoClient, type Db } from 'mongodb';
 import type { Database } from '../types.js';
-import { SEED_VERSION } from '../seed.js';
+import { SEED_VERSION, buildSeed } from '../seed.js';
 
 /**
  * MongoDB persistence: one collection per top-level array plus a `meta`
@@ -30,6 +30,8 @@ const META_ID = 'stocksense';
 export interface MetaDoc {
   _id: string;
   version: number;
+  /** Fingerprint of the seeded catalogue - guards against adopting a foreign DB. */
+  signature: string;
   settings: Database['settings'];
   seq: { ledger: number; receipt: number; delivery: number; transfer: number; adjustment: number };
 }
@@ -65,7 +67,7 @@ export async function closeMongo(): Promise<void> {
 export async function readMongo(): Promise<{ db: Database; seq: MetaDoc['seq'] } | null> {
   const d = mongoDb();
   const meta = (await d.collection<MetaDoc>('meta').findOne({ _id: META_ID })) as MetaDoc | null;
-  if (!meta || meta.version !== SEED_VERSION) return null;
+  if (!meta || meta.version !== SEED_VERSION || meta.signature !== seedSignature()) return null;
 
   const entries = await Promise.all(
     COLLECTIONS.map(async (name) => [name, await d.collection(name).find({}).toArray()] as const),
@@ -91,9 +93,27 @@ export async function writeMongo(target: Database, seq: MetaDoc['seq']): Promise
     await col.deleteMany({});
     if (rows.length) await col.insertMany(rows, { ordered: false });
   }
-  const meta: MetaDoc = { _id: META_ID, version: target.version, settings: target.settings, seq };
+  const meta: MetaDoc = {
+    _id: META_ID,
+    version: target.version,
+    signature: seedSignature(),
+    settings: target.settings,
+    seq,
+  };
   await d.collection<MetaDoc>('meta').replaceOne({ _id: META_ID }, meta, { upsert: true });
   await ensureIndexes(d);
+}
+
+/**
+ * Identifies this application's own data. The Atlas cluster is shared with an
+ * older prototype, so a dataset that does not carry our exact catalogue is
+ * treated as foreign and reseeded rather than silently adopted.
+ */
+function seedSignature(): string {
+  return buildSeed()
+    .products.map((p) => p.sku)
+    .sort()
+    .join(',');
 }
 
 /** Indexes the read paths the dashboard, ledger and document screens use. */

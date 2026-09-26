@@ -47,7 +47,9 @@ api.use(attachUser);
 
 /* ---------------------------- meta ---------------------------- */
 
-api.get('/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+api.get('/health', (_req, res) =>
+  res.json({ ok: true, backend: backendName(), ts: new Date().toISOString() }),
+);
 
 api.get('/snapshot', (req, res) => {
   const { credentials, ...safe } = getDb();
